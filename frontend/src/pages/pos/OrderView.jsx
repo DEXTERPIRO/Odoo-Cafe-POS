@@ -810,21 +810,30 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
                   <button
                     key={p.id}
                     onClick={() => addToCart(p)}
-                    className="product-card group relative text-left rounded-xl p-3 transition-all duration-200 active:scale-95"
+                    className="product-card group relative text-left rounded-xl p-3 transition-all duration-200 active:scale-95 flex flex-col justify-between"
                     style={{
                       background: WHITE,
                       border: `2px solid ${inCart ? catColor : BORDER}`,
-                      minHeight: 110,
+                      minHeight: 125,
                       boxShadow: inCart ? `4px 4px 0px 0px ${catColor}` : `4px 4px 0px 0px ${BORDER}`,
                     }}
                     onMouseEnter={e => { e.currentTarget.style.borderColor = catColor; e.currentTarget.style.boxShadow = `4px 4px 0px 0px ${catColor}`; e.currentTarget.style.transform = 'translate(-2px,-2px)'; }}
                     onMouseLeave={e => { e.currentTarget.style.borderColor = inCart ? catColor : BORDER; e.currentTarget.style.boxShadow = inCart ? `4px 4px 0px 0px ${catColor}` : `4px 4px 0px 0px ${BORDER}`; e.currentTarget.style.transform = 'translate(0,0)'; }}
                   >
-                    {/* Category color bar */}
-                    <div className="w-full h-1 rounded-full mb-2.5" style={{ background: catColor }} />
-                    <div className="product-card-name font-bold leading-tight mb-1.5" style={{ color: FG, fontSize: 13, fontFamily: FONT_H }}>{p.name}</div>
-                    <div className="font-black" style={{ color: catColor, fontSize: 17 }}>₹{parseFloat(p.price).toFixed(0)}</div>
-                    <div className="text-[10px] mt-0.5 font-semibold" style={{ color: MUTED }}>{p.unitOfMeasure}</div>
+                    <div className="w-full">
+                      {/* Category color bar */}
+                      <div className="w-full h-1 rounded-full mb-2.5" style={{ background: catColor }} />
+                      <div className="product-card-name font-bold leading-tight mb-1" style={{ color: FG, fontSize: 13, fontFamily: FONT_H }}>{p.name}</div>
+                      {p.description && (
+                        <div className="text-[10px] leading-tight text-slate-400 mb-2 line-clamp-2" style={{ fontFamily: FONT_B }}>
+                          {p.description}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-baseline justify-between mt-auto w-full">
+                      <div className="font-black" style={{ color: catColor, fontSize: 17 }}>₹{parseFloat(p.price).toFixed(0)}</div>
+                      <div className="text-[10px] font-semibold" style={{ color: MUTED }}>{p.unitOfMeasure}</div>
+                    </div>
 
                     {/* Qty badge if in cart */}
                     {inCart && (

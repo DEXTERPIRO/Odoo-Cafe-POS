@@ -89,7 +89,14 @@ export default function Products() {
             <tbody className="divide-y divide-slate-100">
               {products.map(p => (
                 <tr key={p.id} className="hover:bg-slate-50/50 transition">
-                  <td className="px-5 py-4 text-slate-800 font-bold">{p.name}</td>
+                  <td className="px-5 py-4">
+                    <div className="text-slate-800 font-bold">{p.name}</div>
+                    {p.description && (
+                      <div className="text-xs text-slate-400 font-medium mt-0.5 line-clamp-1 max-w-[250px]" title={p.description}>
+                        {p.description}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-5 py-4">
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold"
                       style={{ backgroundColor: (p.category?.color || '#6B7280') + '15', color: p.category?.color || '#6B7280', border: `1px solid ${(p.category?.color || '#6B7280')}33` }}>

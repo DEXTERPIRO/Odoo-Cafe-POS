@@ -54,28 +54,35 @@ async function main() {
   /* ── 3. PRODUCTS ───────────────────────────────────── */
   const productDefs = [
     // Hot Drinks
-    { name: 'Espresso',        categoryId: hotDrinks.id,  price: 80,  unitOfMeasure: 'cup',  tax: 5, showOnKds: true },
-    { name: 'Cappuccino',      categoryId: hotDrinks.id,  price: 120, unitOfMeasure: 'cup',  tax: 5, showOnKds: true },
-    { name: 'Masala Chai',     categoryId: hotDrinks.id,  price: 60,  unitOfMeasure: 'cup',  tax: 5, showOnKds: true },
+    { name: 'Espresso',        categoryId: hotDrinks.id,  price: 80,  unitOfMeasure: 'cup',  tax: 5, showOnKds: true, description: 'Rich, concentrated shot of pure espresso coffee.' },
+    { name: 'Cappuccino',      categoryId: hotDrinks.id,  price: 120, unitOfMeasure: 'cup',  tax: 5, showOnKds: true, description: 'Double shot of espresso topped with a smooth layer of warm, foamy milk.' },
+    { name: 'Masala Chai',     categoryId: hotDrinks.id,  price: 60,  unitOfMeasure: 'cup',  tax: 5, showOnKds: true, description: 'Traditional Indian tea brewed with fragrant spices and fresh milk.' },
     // Cold Drinks
-    { name: 'Cold Coffee',     categoryId: coldDrinks.id, price: 150, unitOfMeasure: 'glass', tax: 5, showOnKds: true },
-    { name: 'Mango Lassi',     categoryId: coldDrinks.id, price: 120, unitOfMeasure: 'glass', tax: 5, showOnKds: false },
-    { name: 'Iced Americano',  categoryId: coldDrinks.id, price: 140, unitOfMeasure: 'glass', tax: 5, showOnKds: true },
+    { name: 'Cold Coffee',     categoryId: coldDrinks.id, price: 150, unitOfMeasure: 'glass', tax: 5, showOnKds: true, description: 'Chilled blended coffee served creamy and topped with chocolate syrup.' },
+    { name: 'Mango Lassi',     categoryId: coldDrinks.id, price: 120, unitOfMeasure: 'glass', tax: 5, showOnKds: false, description: 'Sweet, refreshing yogurt shake blended with fresh mango pulp.' },
+    { name: 'Iced Americano',  categoryId: coldDrinks.id, price: 140, unitOfMeasure: 'glass', tax: 5, showOnKds: true, description: 'Espresso shots poured over ice and cold water for a crisp start.' },
     // Snacks
-    { name: 'Veg Sandwich',    categoryId: snacks.id,     price: 130, unitOfMeasure: 'piece', tax: 5, showOnKds: true },
-    { name: 'Cheese Toast',    categoryId: snacks.id,     price: 110, unitOfMeasure: 'piece', tax: 5, showOnKds: true },
+    { name: 'Veg Sandwich',    categoryId: snacks.id,     price: 130, unitOfMeasure: 'piece', tax: 5, showOnKds: true, description: 'Fresh toasted bread packed with sliced vegetables and mint chutney.' },
+    { name: 'Cheese Toast',    categoryId: snacks.id,     price: 110, unitOfMeasure: 'piece', tax: 5, showOnKds: true, description: 'Crispy toasted bread loaded with melted cheddar cheese and herbs.' },
     // Mains
-    { name: 'Paneer Pasta',    categoryId: mains.id,      price: 220, unitOfMeasure: 'plate', tax: 5, showOnKds: true },
-    { name: 'Club Sandwich',   categoryId: mains.id,      price: 180, unitOfMeasure: 'piece', tax: 5, showOnKds: true },
+    { name: 'Paneer Pasta',    categoryId: mains.id,      price: 220, unitOfMeasure: 'plate', tax: 5, showOnKds: true, description: 'Italian penne pasta tossed in a creamy spiced tomato sauce with paneer cubes.' },
+    { name: 'Club Sandwich',   categoryId: mains.id,      price: 180, unitOfMeasure: 'piece', tax: 5, showOnKds: true, description: 'Double-decker sandwich with layered vegetables, cheese, and house spread.' },
     // Desserts
-    { name: 'Chocolate Cake',  categoryId: desserts.id,   price: 140, unitOfMeasure: 'slice', tax: 5, showOnKds: true },
-    { name: 'Gulab Jamun',     categoryId: desserts.id,   price: 80,  unitOfMeasure: 'plate', tax: 5, showOnKds: false },
+    { name: 'Chocolate Cake',  categoryId: desserts.id,   price: 140, unitOfMeasure: 'slice', tax: 5, showOnKds: true, description: 'Decadent, moist slice of double chocolate cake.' },
+    { name: 'Gulab Jamun',     categoryId: desserts.id,   price: 80,  unitOfMeasure: 'plate', tax: 5, showOnKds: false, description: 'Warm, soft milk-solid dumplings soaked in cardamom syrup.' },
   ];
 
   const products = {};
   for (const def of productDefs) {
     let p = await prisma.product.findFirst({ where: { name: def.name } });
-    if (!p) p = await prisma.product.create({ data: def });
+    if (!p) {
+      p = await prisma.product.create({ data: def });
+    } else {
+      p = await prisma.product.update({
+        where: { id: p.id },
+        data: { description: def.description },
+      });
+    }
     products[p.name] = p;
   }
   console.log('  ✅ Products created (12)');
