@@ -25,7 +25,8 @@ export default function Signup() {
       setToken(res.accessToken);
       setAuth(res.user, res.accessToken);
       toast.success(`Welcome, ${res.user.name}!`);
-      navigate('/backend');
+      if (res.user.role === 'ADMIN') navigate('/backend', { replace: true });
+      else navigate('/pos', { replace: true });
     } catch (err) {
       toast.error(err.error || 'Signup failed');
     } finally { setLoading(false); }

@@ -35,7 +35,8 @@ export default function Tables() {
     try {
       const [f, t] = await Promise.all([api.get('/floors'), api.get('/tables')]);
       setFloors(f); setTables(t);
-      if (!selectedFloor && f.length > 0) setSelectedFloor(f[0].id);
+      // Auto-select first floor only if none is selected yet
+      setSelectedFloor(prev => (!prev && f.length > 0) ? f[0].id : prev);
     } finally { setLoading(false); }
   };
 

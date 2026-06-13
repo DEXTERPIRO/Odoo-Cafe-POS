@@ -188,7 +188,7 @@ export default function Products() {
               <button
                 type="button"
                 onClick={() => setForm({ ...form, showOnKds: !form.showOnKds })}
-                className={`w-12 h-6.5 rounded-full border-2 border-slate-800 transition ${form.showOnKds ? 'bg-[#F472B6]' : 'bg-slate-200'} relative`}
+                className={`w-12 h-7 rounded-full border-2 border-slate-800 transition ${form.showOnKds ? 'bg-[#F472B6]' : 'bg-slate-200'} relative`}
               >
                 <span className={`absolute top-0.5 w-5 h-5 bg-white border-2 border-slate-800 rounded-full shadow transition-all ${form.showOnKds ? 'left-[calc(100%-1.375rem)]' : 'left-0.5'}`} />
               </button>

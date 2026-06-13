@@ -11,6 +11,11 @@ let accessToken = null;
 export const setToken = (t) => { accessToken = t; };
 export const getToken = () => accessToken;
 
+// Clears persisted auth so GuestGuard sees the user as logged out
+const clearAuth = () => {
+  try { localStorage.removeItem('cafe-pos-auth'); } catch { }
+};
+
 api.interceptors.request.use((config) => {
   if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`;
   return config;
@@ -29,6 +34,9 @@ api.interceptors.response.use(
         original.headers.Authorization = `Bearer ${accessToken}`;
         return api(original);
       } catch {
+        // Clear auth state so GuestGuard redirects properly
+        accessToken = null;
+        clearAuth();
         window.location.href = '/login';
       }
     }

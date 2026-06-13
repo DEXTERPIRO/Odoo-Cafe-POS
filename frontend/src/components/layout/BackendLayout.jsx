@@ -9,14 +9,14 @@ import {
 } from 'lucide-react';
 
 const navItems = [
-  { to: '/backend',                  label: 'Dashboard',       icon: LayoutDashboard, end: true,  accent: '#8B5CF6' },
-  { to: '/backend/products',         label: 'Products',        icon: UtensilsCrossed, end: false, accent: '#F472B6' },
-  { to: '/backend/categories',       label: 'Categories',      icon: Tag,             end: false, accent: '#FBBF24' },
-  { to: '/backend/payment-methods',  label: 'Payment Methods', icon: CreditCard,      end: false, accent: '#34D399' },
-  { to: '/backend/tables',           label: 'Floor & Tables',  icon: LayoutGrid,      end: false, accent: '#8B5CF6' },
-  { to: '/backend/coupons',          label: 'Coupons & Promos',icon: Ticket,          end: false, accent: '#F472B6' },
-  { to: '/backend/users',            label: 'Users',           icon: Users,           end: false, accent: '#FBBF24' },
-  { to: '/backend/reports',          label: 'Reports',         icon: BarChart3,       end: false, accent: '#34D399' },
+  { to: '/backend', label: 'Dashboard', icon: LayoutDashboard, end: true, accent: '#8B5CF6' },
+  { to: '/backend/products', label: 'Products', icon: UtensilsCrossed, end: false, accent: '#F472B6' },
+  { to: '/backend/categories', label: 'Categories', icon: Tag, end: false, accent: '#FBBF24' },
+  { to: '/backend/payment-methods', label: 'Payment Methods', icon: CreditCard, end: false, accent: '#34D399' },
+  { to: '/backend/tables', label: 'Floor & Tables', icon: LayoutGrid, end: false, accent: '#8B5CF6' },
+  { to: '/backend/coupons', label: 'Coupons & Promos', icon: Ticket, end: false, accent: '#F472B6' },
+  { to: '/backend/users', label: 'Users', icon: Users, end: false, accent: '#FBBF24' },
+  { to: '/backend/reports', label: 'Reports', icon: BarChart3, end: false, accent: '#34D399' },
 ];
 
 export default function BackendLayout() {
@@ -24,10 +24,12 @@ export default function BackendLayout() {
   const navigate = useNavigate();
 
   const handleLogout = async () => {
-    await api.post('/auth/logout');
+    try {
+      await api.post('/auth/logout');
+    } catch { /* ignore network errors on logout */ }
     logout();
-    navigate('/login');
     toast.success('Logged out');
+    navigate('/login', { replace: true });
   };
 
   return (
@@ -60,7 +62,7 @@ export default function BackendLayout() {
                 Cafe POS
               </div>
               <div className="text-[10px] font-semibold uppercase tracking-wider mt-0.5"
-                   style={{ color: 'var(--brand-muted-fg)' }}>
+                style={{ color: 'var(--brand-muted-fg)' }}>
                 Admin Console
               </div>
             </div>
@@ -77,18 +79,17 @@ export default function BackendLayout() {
                 to={item.to}
                 end={item.end}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                    isActive ? 'text-white' : 'hover:bg-[#F1F5F9]'
+                  `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${isActive ? 'text-white' : 'hover:bg-[#F1F5F9]'
                   }`
                 }
                 style={({ isActive }) =>
                   isActive
                     ? {
-                        background: item.accent,
-                        boxShadow: '3px 3px 0px 0px #1E293B',
-                        border: '2px solid #1E293B',
-                        color: '#fff',
-                      }
+                      background: item.accent,
+                      boxShadow: '3px 3px 0px 0px #1E293B',
+                      border: '2px solid #1E293B',
+                      color: '#fff',
+                    }
                     : { color: 'var(--brand-muted-fg)', border: '2px solid transparent' }
                 }
               >

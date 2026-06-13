@@ -145,7 +145,7 @@ export default function Coupons() {
                   <td className="px-5 py-4">
                     <button
                       onClick={() => toggleCoupon(c)}
-                      className={`w-12 h-6.5 rounded-full border-2 border-slate-800 transition relative ${c.isActive ? 'bg-[#34D399]' : 'bg-slate-200'}`}
+                      className={`w-12 h-7 rounded-full border-2 border-slate-800 transition relative ${c.isActive ? 'bg-[#34D399]' : 'bg-slate-200'}`}
                     >
                       <span className={`absolute top-0.5 w-5 h-5 bg-white border-2 border-slate-800 rounded-full shadow transition-all ${c.isActive ? 'left-[calc(100%-1.375rem)]' : 'left-0.5'}`} />
                     </button>
@@ -194,7 +194,7 @@ export default function Coupons() {
                   <td className="px-5 py-4">
                     <button
                       onClick={() => togglePromo(p)}
-                      className={`w-12 h-6.5 rounded-full border-2 border-slate-800 transition relative ${p.isActive ? 'bg-[#34D399]' : 'bg-slate-200'}`}
+                      className={`w-12 h-7 rounded-full border-2 border-slate-800 transition relative ${p.isActive ? 'bg-[#34D399]' : 'bg-slate-200'}`}
                     >
                       <span className={`absolute top-0.5 w-5 h-5 bg-white border-2 border-slate-800 rounded-full shadow transition-all ${p.isActive ? 'left-[calc(100%-1.375rem)]' : 'left-0.5'}`} />
                     </button>

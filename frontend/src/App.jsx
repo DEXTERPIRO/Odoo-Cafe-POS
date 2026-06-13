@@ -29,13 +29,23 @@ function AuthGuard({ children }) {
   return children;
 }
 
+// Prevents logged-in users from seeing /login or /signup
+function GuestGuard({ children }) {
+  const { user } = useAuthStore();
+  if (user) {
+    if (user.role === 'ADMIN') return <Navigate to="/backend" replace />;
+    return <Navigate to="/pos" replace />;
+  }
+  return children;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
       <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
+        <Route path="/login" element={<GuestGuard><Login /></GuestGuard>} />
+        <Route path="/signup" element={<GuestGuard><Signup /></GuestGuard>} />
         <Route path="/kitchen" element={<KitchenDisplay />} />
 
         <Route path="/pos" element={<AuthGuard><PosTerminal /></AuthGuard>} />
@@ -49,7 +59,7 @@ export default function App() {
           <Route path="users" element={<Users />} />
           <Route path="reports" element={<Reports />} />
         </Route>
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/" element={<GuestGuard><Navigate to="/login" replace /></GuestGuard>} />
       </Routes>
     </BrowserRouter>
   );

@@ -99,7 +99,7 @@ export default function UsersPage() {
               <tr key={u.id} className={`transition ${!u.isActive ? 'opacity-55 bg-slate-50/30' : 'hover:bg-slate-50/50'}`}>
                 <td className="px-5 py-4 text-slate-800 font-bold flex items-center gap-3">
                   <div className="w-9 h-9 rounded-xl border-2 border-slate-800 bg-[#FBBF24] text-slate-900 flex items-center justify-center text-sm font-black shadow-pop-sm shrink-0">
-                    {u.name[0].toUpperCase()}
+                    {u.name?.[0]?.toUpperCase()}
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span>{u.name}</span>
@@ -166,7 +166,7 @@ export default function UsersPage() {
             </div>
             <div>
               <label className="block text-sm font-bold text-slate-700 mb-1">Password * (min 8 chars)</label>
-              <input required type="password" value={addForm.password} onChange={e => setAddForm({ ...addForm, password: e.target.value })}
+              <input required type="password" minLength={8} value={addForm.password} onChange={e => setAddForm({ ...addForm, password: e.target.value })}
                 className="w-full bg-white border-2 border-slate-200 text-slate-800 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#FBBF24] transition font-semibold" />
             </div>
             <div>

@@ -477,27 +477,7 @@ export default function KitchenDisplay() {
           </span>
         </div>
 
-        {/* Sound controls */}
-        <div className="flex items-center gap-2 border-2 border-slate-800 p-1 bg-slate-50 rounded-xl shadow-pop-sm font-outfit">
-          <button
-            onClick={toggleSound}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all border-2 border-transparent
-                        ${soundEnabled 
-                          ? 'bg-violet-600 text-white font-black' 
-                          : 'bg-white border-slate-350 text-slate-500 hover:text-slate-700'}`}
-          >
-            {soundEnabled ? <Volume2 size={13} /> : <VolumeX size={13} />}
-            <span>{soundEnabled ? 'Sound On' : 'Muted'}</span>
-          </button>
-          <button
-            onClick={handleTestSound}
-            className="flex items-center gap-0.5 bg-white hover:bg-slate-100 text-slate-700 border-2 border-slate-300 px-2 py-1 rounded-lg text-xs font-bold transition-all"
-            title="Test sound"
-          >
-            <Play size={11} fill="currentColor" className="text-slate-600" />
-            <span>Test</span>
-          </button>
-        </div>
+
 
         {/* Clock */}
         <div className="ml-auto text-right">
