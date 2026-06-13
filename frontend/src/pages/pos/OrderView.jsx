@@ -296,6 +296,31 @@ function CustomerModal({ onAssign, onClose }) {
             ))}
             {search && customers.length === 0 && <div className="text-slate-500 text-sm text-center py-4">No customers found</div>}
           </div>
+          {search.trim().length > 0 && customers.length <= 1 && (
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const val = search.trim();
+                  const isPhone = /^[0-9+() -]{7,15}$/.test(val);
+                  const payload = {
+                    name: isPhone ? `Customer ${val}` : val,
+                    phone: isPhone ? val : '',
+                    email: '',
+                  };
+                  const newCust = await api.post('/customers', payload);
+                  onAssign(newCust);
+                  toast.success(`Customer "${newCust.name}" added!`);
+                } catch (err) {
+                  toast.error(err?.error || 'Failed to quickly create customer');
+                }
+              }}
+              className="w-full text-center py-2.5 px-3 bg-violet-50 hover:bg-violet-100 text-violet-750 font-bold border-2 border-dashed border-violet-300 rounded-xl transition-all text-xs flex items-center justify-center gap-1.5 mt-2"
+              style={{ boxShadow: 'var(--pop-shadow-sm)' }}
+            >
+              <Plus size={14} /> Quick Add "{search.trim()}" as Customer
+            </button>
+          )}
         </div>
       )}
 
