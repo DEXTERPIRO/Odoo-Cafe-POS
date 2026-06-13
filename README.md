@@ -10,20 +10,22 @@ A production-ready, real-time Point of Sale (POS) system designed for cafes and 
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [Screenshots](#screenshots)
+2. [Playful Geometric Design System](#playful-geometric-design-system)
+3. [Mobile & Desktop Responsiveness](#mobile--desktop-responsiveness)
+4. [Screenshots](#screenshots)
    - [Authentication](#authentication)
    - [Employee — POS Terminal Flow](#employee--pos-terminal-flow)
    - [Kitchen Display System](#kitchen-display-system)
    - [Admin — Backend Panel](#admin--backend-panel)
-3. [Feature Reference](#feature-reference)
-4. [Demo Credentials](#demo-credentials)
-5. [Quick Demo Walkthrough](#quick-demo-walkthrough)
-6. [Tech Stack](#tech-stack)
-7. [Project Structure](#project-structure)
-8. [Local Development Setup](#local-development-setup)
-9. [Production Deployment Guide](#production-deployment-guide)
-10. [Security Architecture](#security-architecture)
-11. [API Endpoints Reference](#api-endpoints-reference)
+5. [Feature Reference](#feature-reference)
+6. [Demo Credentials](#demo-credentials)
+7. [Quick Demo Walkthrough](#quick-demo-walkthrough)
+8. [Tech Stack](#tech-stack)
+9. [Project Structure](#project-structure)
+10. [Local Development Setup](#local-development-setup)
+11. [Production Deployment Guide](#production-deployment-guide)
+12. [Security Architecture](#security-architecture)
+13. [API Endpoints Reference](#api-endpoints-reference)
 
 ---
 
@@ -36,6 +38,33 @@ Cafe POS is designed as a multi-role, real-time system where:
 - **Administrators** use the backend panel to manage products, categories, tables, coupons, promotions, payment methods, users, and generate analytical reports.
 
 All roles share a common authentication layer with JWT access and refresh token rotation. Role-based guards control page access automatically.
+
+---
+
+## Playful Geometric Design System
+
+This project features a custom-crafted **Playful Geometric (Memphis-Style)** design system. It focuses on warmth, high-contrast tactility, and visual personality:
+
+* **🎨 Color Palette**: Warm Cream background (`#FFFDF5`), Slate text (`#1E293B`), Vivid Violet (`#8B5CF6`) primary, Hot Pink (`#F472B6`) secondary, Amber (`#FBBF24`) tertiary, and Mint (`#34D399`) quaternary.
+* **✍️ Typography**: `"Outfit"` for headings (characterful geometric sans) and `"Plus Jakarta Sans"` for body copy and UI elements.
+* **⚡ Visual Signatures**: Chunky `2px solid #1E293B` borders, hard offset shadows (no blur) with hover-lift and active-press offsets, rotating "sticker" cards, and retro dot-grid patterns.
+
+---
+
+## Mobile & Desktop Responsiveness
+
+The interface is optimized for all devices, ranging from wide desktop displays to tablet and mobile viewports:
+
+1. **Dynamic Single-Column Switcher (Mobile)**:
+   - Below `1024px` width, the POS Billing screen utilizes a clean single-column layout (swapping between the **Product Catalog** and **Cart Details**).
+   - Pinned segmented toggle control (**Catalog | Cart**) sits at the top for easy navigation.
+   - Smart floating bottom pill button (**View Cart**) displays cart counts and subtotal.
+2. **Global Mobile Tab Bar**:
+   - Pushes header tabs to a sticky bottom navigation bar on mobile/tablet screens.
+   - Clears the header to prevent text overflow and overlapping logo elements.
+3. **Responsive Grids & Lists**:
+   - Management widgets auto-wrap vertically on narrow screens.
+   - Orders lists hide secondary information (time, customer name) on mobile to fit the row.
 
 ---
 
