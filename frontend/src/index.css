@@ -372,24 +372,27 @@ input, select, textarea {
 }
 
 /* ─── Responsive POS layout ─────────────────────────── */
-@media (max-width: 768px) {
-  /* On small tablets, product grid goes 2-col */
+@media (max-width: 1023px) {
+  /* On mobile/tablet, product grid uses auto-fit columns */
   .pos-product-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)) !important;
   }
-  /* Stack POS columns vertically on mobile */
+  /* Stacking columns is controlled by hidden/flex in React */
   .pos-layout {
     flex-direction: column !important;
   }
   .pos-product-col {
     width: 100% !important;
-    max-height: 55vh;
+    height: 100% !important;
+    max-height: none !important;
     border-right: none !important;
-    border-bottom: 1px solid #1f2937;
+    border-bottom: none !important;
   }
   .pos-cart-col {
     width: 100% !important;
-    max-height: 45vh;
+    height: 100% !important;
+    max-height: none !important;
+    border-left: none !important;
   }
 }
 

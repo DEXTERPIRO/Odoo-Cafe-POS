@@ -340,6 +340,7 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
   const [coupon, setCoupon] = useState(null);
   const [customer, setCustomer] = useState(null);
   const [currentOrder, setCurrentOrder] = useState(existingOrder);
+  const [mobileTab, setMobileTab] = useState('products');
 
   /* ── UI state ── */
   const [showPayment, setShowPayment] = useState(false);
@@ -710,11 +711,11 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
   const FONT_B = "'Plus Jakarta Sans', system-ui, sans-serif";
 
   return (
-    <div className="pos-layout flex h-full overflow-hidden" style={{ background: BG, fontFamily: FONT_B }}>
+    <div className="pos-layout flex flex-col lg:flex-row h-full overflow-hidden" style={{ background: BG, fontFamily: FONT_B }}>
 
       {/* ══ LEFT — Product Grid ══════════════════════════ */}
-      <div className="pos-product-col flex flex-col shrink-0 border-r"
-           style={{ width: '58%', borderColor: BORDER, background: BG }}>
+      <div className={`pos-product-col flex-col shrink-0 border-r ${mobileTab === 'products' ? 'flex' : 'hidden'} lg:flex lg:w-[58%] w-full h-full`}
+           style={{ borderColor: BORDER, background: BG }}>
 
         {/* Category tabs + Local search bar */}
         <div className="shrink-0 px-4 pt-3 pb-2 space-y-2" style={{ background: WHITE, borderBottom: `2px solid ${BORDER}` }}>
@@ -737,6 +738,31 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
                 <X size={14} />
               </button>
             )}
+          </div>
+
+          {/* Mobile segmented toggle */}
+          <div className="lg:hidden flex bg-slate-150 p-0.5 rounded-xl border-2 border-slate-800" style={{ boxShadow: 'var(--pop-shadow-sm)' }}>
+            <button
+              type="button"
+              onClick={() => setMobileTab('products')}
+              className={`flex-1 py-1.5 rounded-lg text-xs font-black transition-all ${mobileTab === 'products' ? 'bg-white text-slate-800 border-2 border-slate-800 shadow-sm' : 'text-slate-500'}`}
+              style={{ fontFamily: FONT_H }}
+            >
+              Catalog
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileTab('cart')}
+              className={`flex-1 py-1.5 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1.5 ${mobileTab === 'cart' ? 'bg-white text-slate-800 border-2 border-slate-800 shadow-sm' : 'text-slate-500'}`}
+              style={{ fontFamily: FONT_H }}
+            >
+              <span>Cart</span>
+              {cartItems.length > 0 && (
+                <span className="bg-[#F472B6] text-slate-900 text-[9px] font-black px-1.5 py-0.5 rounded-full border-2 border-slate-800" style={{ boxShadow: '1px 1px 0px 0px #1E293B' }}>
+                  {cartItems.length}
+                </span>
+              )}
+            </button>
           </div>
 
           {/* Category tabs */}
@@ -829,11 +855,28 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
               </div>
             </div>
           )}
+          {/* Mobile floating View Cart banner */}
+          {cartItems.length > 0 && (
+            <div className="lg:hidden p-3 bg-[#FFFDF5] border-t-2 border-[#1E293B] sticky bottom-0 left-0 right-0 z-10 shrink-0">
+              <button
+                type="button"
+                onClick={() => setMobileTab('cart')}
+                className="w-full h-11 flex items-center justify-between px-4 rounded-xl font-black text-sm transition-all duration-200 border-2"
+                style={{ background: ACCENT, color: '#fff', borderColor: FG, boxShadow: `3px 3px 0px 0px ${FG}` }}
+              >
+                <span className="flex items-center gap-1.5">
+                  <ShoppingCart size={15} strokeWidth={2.5} />
+                  View Cart ({cartItems.length} item{cartItems.length !== 1 ? 's' : ''})
+                </span>
+                <span>{fmt(total)}</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       {/* ══ RIGHT — Cart + Payment ════════════════════════ */}
-      <div className="pos-cart-col flex flex-col flex-1" style={{ background: WHITE, borderLeft: `2px solid ${BORDER}` }}>
+      <div className={`pos-cart-col flex-col flex-1 ${mobileTab === 'cart' ? 'flex' : 'hidden'} lg:flex h-full`} style={{ background: WHITE, borderLeft: `2px solid ${BORDER}` }}>
 
         {/* ── Cart Header ── */}
         <div className="px-4 py-3 shrink-0" style={{ borderBottom: `2px solid ${BORDER}`, background: WHITE }}>

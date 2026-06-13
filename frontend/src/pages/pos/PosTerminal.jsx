@@ -212,7 +212,7 @@ export default function PosTerminal() {
         </button>
 
         {/* Tabs */}
-        <nav className="flex items-center gap-1">
+        <nav className="hidden lg:flex items-center gap-1">
           {tabs.map(tab => {
             const TabIcon = tab.Icon;
             const active = currentView === tab.id && tab.id !== 'table-view';
@@ -236,7 +236,7 @@ export default function PosTerminal() {
         </nav>
 
         {/* Search */}
-        <div className="flex-1 max-w-sm mx-2">
+        <div className="hidden md:block flex-1 max-w-sm mx-2">
           <div className="relative">
             <Search size={14} strokeWidth={2.5} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: MUTED_FG }} />
             <input
@@ -604,7 +604,7 @@ export default function PosTerminal() {
                 <p className="text-[10px] font-black uppercase tracking-widest font-outfit" style={{ color: '#94A3B8' }}>Management</p>
 
                 {/* 3 utility cards */}
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[
                     { label: 'Active Orders', sub: 'View & complete orders', Icon: ClipboardList, color: '#DB2777', bg: '#FDF2F8', onClick: () => setCurrentView('orders-list') },
                     { label: 'Customers', sub: 'Profiles & loyalty', Icon: UserCircle, color: '#2563EB', bg: '#EFF6FF', onClick: () => setCurrentView('customers') },
@@ -702,6 +702,39 @@ export default function PosTerminal() {
           </div>
         )}
       </main>
+
+      {/* ── Global Mobile Tab Bar ── */}
+      <nav className="lg:hidden shrink-0 h-16 border-t-2 border-[#1E293B] bg-white flex items-center justify-around z-35 w-full"
+           style={{ boxShadow: '0 -2px 10px rgba(0,0,0,0.05)' }}>
+        {tabs.map(tab => {
+          const TabIcon = tab.Icon;
+          const active = currentView === tab.id;
+          const accent = TAB_ACCENTS[tab.id] || ACCENT;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => handleTabChange(tab.id)}
+              type="button"
+              className="flex-1 h-full flex flex-col items-center justify-center gap-1 font-bold text-[10px] transition-all"
+              style={{
+                color: active ? accent : MUTED_FG,
+                fontFamily: FONT_HEADING,
+              }}
+            >
+              <div className="relative">
+                <TabIcon size={18} strokeWidth={active ? 3 : 2.5} />
+                {tab.id === 'order' && draftCount > 0 && (
+                  <span className="absolute -top-1.5 -right-2.5 w-4 h-4 rounded-full bg-pink-500 text-[9px] font-black text-white flex items-center justify-center border border-slate-800"
+                        style={{ boxShadow: '1px 1px 0px 0px #1E293B' }}>
+                    {draftCount}
+                  </span>
+                )}
+              </div>
+              <span>{tab.label.split(' ')[0]}</span>
+            </button>
+          );
+        })}
+      </nav>
 
       {/* ── Floor Popup ── */}
       {showFloorPopup && (

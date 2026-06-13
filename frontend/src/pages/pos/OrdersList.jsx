@@ -213,7 +213,7 @@ export default function OrdersList({ session }) {
                     <div className="flex-1 text-xs font-semibold" style={{ color: MUTED }}>
                       {order.lines?.length || 0} item{order.lines?.length !== 1 ? 's' : ''}
                       {order.customer && (
-                        <span className="ml-2" style={{ color: ACCENT }}>· {order.customer.name}</span>
+                        <span className="ml-2 hidden sm:inline" style={{ color: ACCENT }}>· {order.customer.name}</span>
                       )}
                     </div>
 
@@ -231,7 +231,7 @@ export default function OrdersList({ session }) {
                     </div>
 
                     {/* Time */}
-                    <div className="text-xs shrink-0 font-semibold" style={{ color: MUTED }}>
+                    <div className="text-xs shrink-0 font-semibold hidden sm:block" style={{ color: MUTED }}>
                       {new Date(order.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                     </div>
 
