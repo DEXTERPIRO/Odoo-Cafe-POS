@@ -14,7 +14,7 @@ import Users from './pages/backend/Users';
 import Reports from './pages/backend/Reports';
 import PosTerminal from './pages/pos/PosTerminal';
 import KitchenDisplay from './pages/kitchen/KitchenDisplay';
-import PublicMenu from './pages/PublicMenu';
+
 
 function AdminGuard({ children }) {
   const { user } = useAuthStore();
@@ -37,7 +37,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/kitchen" element={<KitchenDisplay />} />
-        <Route path="/menu" element={<PublicMenu />} />
+
         <Route path="/pos" element={<AuthGuard><PosTerminal /></AuthGuard>} />
         <Route path="/backend" element={<AdminGuard><BackendLayout /></AdminGuard>}>
           <Route index element={<Dashboard />} />

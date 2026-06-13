@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { X } from 'lucide-react';
 
 const sizeClasses = {
   sm: 'max-w-sm',
@@ -26,25 +27,25 @@ export default function Modal({
 
   return (
     <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className={`bg-gray-900 border border-gray-700 rounded-2xl w-full ${sizeClasses[size]} max-h-[90vh] flex flex-col shadow-2xl`}
-        style={{ animation: 'modalIn 0.18s ease-out' }}
+        className={`bg-white border-2 border-slate-800 rounded-2xl w-full ${sizeClasses[size]} max-h-[90vh] flex flex-col`}
+        style={{ boxShadow: 'var(--pop-shadow-lg)', animation: 'modalIn 0.18s ease-out' }}
       >
         {!hideHeader && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 shrink-0">
-            <h2 className="text-white font-semibold text-lg">{title}</h2>
+          <div className="flex items-center justify-between px-6 py-4 border-b-2 border-slate-100 shrink-0 bg-white rounded-t-2xl">
+            <h2 className="text-slate-800 font-bold text-lg font-outfit">{title}</h2>
             <button
               onClick={onClose}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition text-xl leading-none"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition"
             >
-              ×
+              <X size={18} />
             </button>
           </div>
         )}
-        <div className="overflow-y-auto flex-1 px-6 py-5">
+        <div className="overflow-y-auto flex-1 px-6 py-5 bg-[#FFFDF5] rounded-b-2xl font-jakarta text-slate-700">
           {children}
         </div>
       </div>

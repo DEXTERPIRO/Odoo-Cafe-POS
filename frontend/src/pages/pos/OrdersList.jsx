@@ -5,9 +5,34 @@ import toast from 'react-hot-toast';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { TableSkeleton } from '../../components/ui/SkeletonLoader';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import {
+  Armchair, ShoppingBag, ClipboardList, Ticket,
+  CheckCircle2, Edit3, Trash2, RefreshCw, ChevronDown,
+  IndianRupee, ShoppingCart, ChefHat, XCircle, BellRing
+} from 'lucide-react';
+
+const BG     = '#FFFDF5';
+const WHITE  = '#FFFFFF';
+const FG     = '#1E293B';
+const MUTED  = '#64748B';
+const BORDER = '#E2E8F0';
+const ACCENT = '#8B5CF6';
+const AMBER  = '#FBBF24';
+const EMERALD= '#34D399';
+const PINK   = '#F472B6';
+const FONT_H = "'Outfit', system-ui, sans-serif";
+const FONT_B = "'Plus Jakarta Sans', system-ui, sans-serif";
 
 const fmt = (n) =>
   `₹${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const STATUS_CONFIG = {
+  PAID:             { color: '#059669', bg: `${EMERALD}20`, border: `${EMERALD}60`, label: 'Paid',      accent: EMERALD },
+  READY:            { color: '#7C3AED', bg: '#EDE9FE',      border: '#C4B5FD',      label: 'Ready ✓',  accent: '#8B5CF6' },
+  SENT_TO_KITCHEN:  { color: '#2563EB', bg: '#EFF6FF',      border: '#BFDBFE',      label: 'Kitchen',   accent: '#60A5FA' },
+  DRAFT:            { color: MUTED,     bg: '#F8FAFC',      border: BORDER,         label: 'Draft',     accent: MUTED },
+  CANCELLED:        { color: '#DC2626', bg: '#FEF2F2',      border: '#FECACA',      label: 'Cancelled', accent: '#F87171' },
+};
 
 export default function OrdersList({ session }) {
   const navigate = useNavigate();
@@ -48,7 +73,6 @@ export default function OrdersList({ session }) {
   };
 
   const handleEditOrder = (order) => {
-    // Build cart items from order lines
     const cartItems = order.lines.map(line => ({
       productId: line.productId,
       name: line.product.name,
@@ -56,12 +80,9 @@ export default function OrdersList({ session }) {
       price: parseFloat(line.unitPrice),
       quantity: line.quantity,
       lineTotal: parseFloat(line.lineTotal),
-      categoryColor: line.product.category?.color || '#6b7280',
-      color: line.product.category?.color || '#6b7280',
+      categoryColor: line.product.category?.color || ACCENT,
+      color: line.product.category?.color || ACCENT,
     }));
-
-    // Navigate to POS order view with this order loaded
-    // Pass order data via location state
     navigate('/pos', {
       state: {
         loadOrder: {
@@ -78,160 +99,245 @@ export default function OrdersList({ session }) {
     });
   };
 
-  const statusOrder = { SENT_TO_KITCHEN: 0, DRAFT: 1, PAID: 2, CANCELLED: 3 };
+  const statusOrder = { READY: 0, SENT_TO_KITCHEN: 1, DRAFT: 2, PAID: 3, CANCELLED: 4 };
   const sorted = [...orders].sort((a, b) =>
     (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9) ||
     new Date(b.createdAt) - new Date(a.createdAt)
   );
 
+  const revenue = orders.filter(o => o.status === 'PAID').reduce((s, o) => s + parseFloat(o.total || 0), 0);
+
   return (
-    <div className="h-full flex flex-col bg-gray-950 overflow-hidden">
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between shrink-0">
+    <div className="h-full flex flex-col overflow-hidden" style={{ background: BG, fontFamily: FONT_B }}>
+
+      {/* ── Header ── */}
+      <div className="px-5 py-4 shrink-0 flex items-center justify-between"
+           style={{ borderBottom: `2px solid ${BORDER}`, background: WHITE }}>
         <div>
-          <h2 className="text-white font-bold text-lg">Orders</h2>
-          <p className="text-gray-500 text-sm mt-0.5">
-            {session ? `Session started ${new Date(session.openedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}` : 'No active session'}
+          <h2 className="font-black text-xl" style={{ color: FG, fontFamily: FONT_H }}>Orders</h2>
+          <p className="text-xs mt-0.5 font-semibold" style={{ color: MUTED }}>
+            {session
+              ? `Session started ${new Date(session.openedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`
+              : 'No active session'}
           </p>
         </div>
-        <button onClick={fetchOrders} className="text-gray-400 hover:text-white text-sm flex items-center gap-1.5 bg-gray-800 px-3 py-1.5 rounded-lg transition">
-          🔄 Refresh
+        <button
+          onClick={fetchOrders}
+          className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-all duration-200 border-2"
+          style={{ background: WHITE, color: MUTED, borderColor: BORDER, boxShadow: `2px 2px 0px 0px ${BORDER}` }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#F1F5F9'; e.currentTarget.style.color = FG; }}
+          onMouseLeave={e => { e.currentTarget.style.background = WHITE; e.currentTarget.style.color = MUTED; }}
+        >
+          <RefreshCw size={14} strokeWidth={2.5} className={loading ? 'animate-spin' : ''} />
+          Refresh
         </button>
       </div>
 
-      {/* Summary pills */}
+      {/* ── Stats row ── */}
       {!loading && orders.length > 0 && (
-        <div className="px-6 py-3 flex gap-2 shrink-0 overflow-x-auto scrollbar-none">
+        <div className="px-5 py-3 shrink-0 flex items-center gap-2 flex-wrap"
+             style={{ borderBottom: `2px solid ${BORDER}`, background: WHITE }}>
           {[
-            { label: 'Paid',    status: 'PAID',            color: 'bg-green-500/20 text-green-400 border-green-500/30' },
-            { label: 'Kitchen', status: 'SENT_TO_KITCHEN', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
-            { label: 'Draft',   status: 'DRAFT',           color: 'bg-gray-700 text-gray-300 border-gray-600' },
-            { label: 'Cancelled', status: 'CANCELLED',     color: 'bg-red-500/20 text-red-400 border-red-500/30' },
-          ].map(({ label, status, color }) => {
+            { label: 'Ready',    status: 'READY',           icon: BellRing },
+            { label: 'Kitchen',  status: 'SENT_TO_KITCHEN', icon: ChefHat },
+            { label: 'Draft',    status: 'DRAFT',           icon: ShoppingCart },
+            { label: 'Paid',     status: 'PAID',            icon: CheckCircle2 },
+            { label: 'Cancelled',status: 'CANCELLED',       icon: XCircle },
+          ].map(({ label, status, icon: Icon }) => {
             const count = orders.filter(o => o.status === status).length;
+            const cfg = STATUS_CONFIG[status];
             if (!count) return null;
             return (
-              <span key={status} className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold border ${color}`}>
+              <div key={status}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border-2"
+                style={{ background: cfg.bg, borderColor: cfg.border, color: cfg.color }}>
+                <Icon size={12} strokeWidth={2.5} />
                 {label}: {count}
-              </span>
+              </div>
             );
           })}
-          <span className="shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold border border-orange-500/30 bg-orange-500/10 text-orange-400 ml-auto">
-            Revenue: {fmt(orders.filter(o => o.status === 'PAID').reduce((s, o) => s + parseFloat(o.total || 0), 0))}
-          </span>
+          <div className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black border-2"
+               style={{ background: `${ACCENT}12`, borderColor: `${ACCENT}50`, color: '#6D28D9' }}>
+            <IndianRupee size={12} strokeWidth={2.5} />
+            Revenue: {fmt(revenue)}
+          </div>
         </div>
       )}
 
-      {/* List */}
-      <div className="flex-1 overflow-y-auto px-6 pb-6">
+      {/* ── Orders list ── */}
+      <div className="flex-1 overflow-y-auto px-5 py-4" style={{ background: BG }}>
         {loading ? (
           <TableSkeleton rows={6} />
         ) : sorted.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 gap-3 text-center">
-            <div className="text-5xl opacity-20">📋</div>
-            <div className="text-gray-500 font-medium">No orders this session yet.</div>
-            <div className="text-gray-600 text-sm">Go to POS Order tab and start taking orders!</div>
+          <div className="flex flex-col items-center justify-center h-full min-h-[200px] gap-4 text-center">
+            <div className="w-20 h-20 rounded-2xl flex items-center justify-center border-2"
+                 style={{ background: WHITE, borderColor: BORDER, boxShadow: `4px 4px 0px 0px ${BORDER}` }}>
+              <ClipboardList size={36} style={{ color: BORDER }} />
+            </div>
+            <div>
+              <div className="font-bold text-base" style={{ color: MUTED, fontFamily: FONT_H }}>No orders this session yet</div>
+              <div className="text-sm mt-1" style={{ color: '#CBD5E1' }}>Go to POS Order and start taking orders!</div>
+            </div>
           </div>
         ) : (
-          <div className="space-y-2 pt-2">
-            {sorted.map(order => (
-              <div key={order.id}
-                className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden hover:border-gray-700 transition">
-                {/* Row */}
-                <div
-                  className="flex items-center gap-4 px-4 py-3 cursor-pointer"
-                  onClick={() => setExpanded(expanded === order.id ? null : order.id)}
-                >
-                  {/* Order number */}
-                  <div className="text-white font-mono font-bold text-sm w-24 shrink-0">{order.orderNumber}</div>
+          <div className="space-y-2">
+            {sorted.map(order => {
+              const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.DRAFT;
+              const isExpanded = expanded === order.id;
+              return (
+                <div key={order.id}
+                  className="rounded-xl overflow-hidden transition-all duration-200"
+                  style={{ background: WHITE, border: `2px solid ${BORDER}`, boxShadow: `4px 4px 0px 0px ${BORDER}` }}>
 
-                  {/* Table / Takeaway */}
-                  <div className="text-gray-400 text-sm w-24 shrink-0">
-                    {order.table ? `🪑 ${order.table.tableNumber}` : '🥡 Takeaway'}
-                  </div>
-
-                  {/* Items count */}
-                  <div className="text-gray-500 text-xs flex-1">
-                    {order.lines?.length || 0} item{order.lines?.length !== 1 ? 's' : ''}
-                    {order.customer && <span className="ml-2 text-blue-400">· {order.customer.name}</span>}
-                  </div>
-
-                  {/* Total */}
-                  <div className="text-orange-400 font-bold text-sm w-24 text-right shrink-0">
-                    {fmt(order.total)}
-                  </div>
-
-                  {/* Status */}
-                  <div className="w-32 text-right shrink-0">
-                    <StatusBadge status={order.status} />
-                  </div>
-
-                  {/* Time */}
-                  <div className="text-gray-600 text-xs w-16 text-right shrink-0">
-                    {new Date(order.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                  </div>
-
-                  {/* Expand arrow */}
-                  <div className={`text-gray-600 text-xs transition-transform ${expanded === order.id ? 'rotate-180' : ''}`}>▾</div>
-                </div>
-
-                {/* Expanded detail */}
-                {expanded === order.id && (
-                  <div className="border-t border-gray-800 px-4 py-3 bg-gray-950/50">
-                    {/* Line items */}
-                    <div className="space-y-1 mb-3">
-                      {order.lines?.map(l => (
-                        <div key={l.id} className="flex items-center justify-between text-sm">
-                          <span className="text-gray-300">{l.product?.name} × {l.quantity}</span>
-                          <span className="text-gray-400">{fmt(l.lineTotal)}</span>
-                        </div>
-                      ))}
+                  {/* Main row */}
+                  <div
+                    className="flex items-center gap-3 px-4 py-3 cursor-pointer"
+                    style={{ borderLeft: `4px solid ${cfg.accent}` }}
+                    onClick={() => setExpanded(isExpanded ? null : order.id)}
+                  >
+                    {/* Order # */}
+                    <div className="font-black font-mono text-sm shrink-0" style={{ color: ACCENT, minWidth: 100 }}>
+                      {order.orderNumber}
                     </div>
 
-                    {/* Totals */}
-                    <div className="border-t border-gray-800 pt-2 space-y-1 text-xs">
-                      <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>{fmt(order.subtotal)}</span></div>
-                      {parseFloat(order.discountAmount) > 0 && (
-                        <div className="flex justify-between text-green-400"><span>Discount</span><span>−{fmt(order.discountAmount)}</span></div>
+                    {/* Table / Takeaway */}
+                    <div className="text-xs flex items-center gap-1 shrink-0 font-semibold" style={{ color: MUTED, minWidth: 80 }}>
+                      {order.table ? (
+                        <><Armchair size={12} strokeWidth={2.5} /> {order.table.tableNumber.toUpperCase()}</>
+                      ) : (
+                        <><ShoppingBag size={12} strokeWidth={2.5} /> Takeaway</>
                       )}
-                      <div className="flex justify-between text-gray-500"><span>Tax (5%)</span><span>{fmt(order.taxAmount)}</span></div>
-                      <div className="flex justify-between text-orange-400 font-bold text-sm pt-1"><span>Total</span><span>{fmt(order.total)}</span></div>
                     </div>
 
-                    {/* Payment info for PAID */}
-                    {order.status === 'PAID' && (
-                      <div className="mt-2 flex items-center gap-2 text-xs text-green-400 bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2">
-                        <span>✅ Paid via {order.paymentMethod}</span>
-                        {order.couponCode && <span className="ml-2 text-blue-400">🎫 {order.couponCode}</span>}
-                      </div>
-                    )}
+                    {/* Items + customer */}
+                    <div className="flex-1 text-xs font-semibold" style={{ color: MUTED }}>
+                      {order.lines?.length || 0} item{order.lines?.length !== 1 ? 's' : ''}
+                      {order.customer && (
+                        <span className="ml-2" style={{ color: ACCENT }}>· {order.customer.name}</span>
+                      )}
+                    </div>
 
-                    {/* Action buttons for DRAFT */}
-                    {order.status === 'DRAFT' && (
-                      <div className="flex gap-2 mt-3">
-                        <button
-                          onClick={() => handleEditOrder(order)}
-                          className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-2 rounded-lg text-sm font-medium transition"
-                        >
-                          ✏️ Edit Order
-                        </button>
-                        <button
-                          onClick={() => setCancelTarget(order.id)}
-                          className="flex-1 bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/30 py-2 rounded-lg text-sm transition"
-                        >
-                          🗑 Cancel Order
-                        </button>
-                      </div>
-                    )}
+                    {/* Total */}
+                    <div className="font-black text-sm shrink-0" style={{ color: ACCENT }}>
+                      {fmt(order.total)}
+                    </div>
+
+                    {/* Status badge */}
+                    <div className="shrink-0">
+                      <span className="px-2.5 py-1 rounded-lg text-xs font-bold border-2"
+                        style={{ background: cfg.bg, borderColor: cfg.border, color: cfg.color }}>
+                        {cfg.label}
+                      </span>
+                    </div>
+
+                    {/* Time */}
+                    <div className="text-xs shrink-0 font-semibold" style={{ color: MUTED }}>
+                      {new Date(order.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+
+                    {/* Expand arrow */}
+                    <ChevronDown
+                      size={14} strokeWidth={2.5}
+                      className="transition-transform duration-200 shrink-0"
+                      style={{ color: MUTED, transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                    />
                   </div>
-                )}
-              </div>
-            ))}
+
+                  {/* Expanded detail */}
+                  {isExpanded && (
+                    <div className="px-4 py-3" style={{ borderTop: `2px solid ${BORDER}`, background: '#FAFAFA' }}>
+                      {/* Line items */}
+                      <div className="space-y-1.5 mb-3">
+                        {order.lines?.map(l => (
+                          <div key={l.id} className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full shrink-0"
+                                   style={{ background: l.product?.category?.color || ACCENT }} />
+                              <span className="font-semibold" style={{ color: FG }}>{l.product?.name}</span>
+                              <span className="text-xs" style={{ color: MUTED }}>× {l.quantity}</span>
+                            </div>
+                            <span className="font-bold" style={{ color: ACCENT }}>{fmt(l.lineTotal)}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Totals */}
+                      <div className="space-y-1 text-xs pt-2" style={{ borderTop: `2px solid ${BORDER}` }}>
+                        <div className="flex justify-between font-semibold" style={{ color: MUTED }}>
+                          <span>Subtotal</span><span style={{ color: FG }}>{fmt(order.subtotal)}</span>
+                        </div>
+                        {parseFloat(order.discountAmount) > 0 && (
+                          <div className="flex justify-between font-bold" style={{ color: '#059669' }}>
+                            <span>Discount</span><span>−{fmt(order.discountAmount)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between font-semibold" style={{ color: MUTED }}>
+                          <span>Tax (5%)</span><span style={{ color: FG }}>{fmt(order.taxAmount)}</span>
+                        </div>
+                        <div className="flex justify-between font-black text-sm pt-1 border-t-2" style={{ color: ACCENT, borderColor: BORDER }}>
+                          <span>Total</span><span>{fmt(order.total)}</span>
+                        </div>
+                      </div>
+
+                      {/* Payment info */}
+                      {order.status === 'PAID' && (
+                        <div className="mt-3 flex items-center gap-2 text-xs px-3 py-2 rounded-xl border-2 font-semibold"
+                             style={{ background: `${EMERALD}15`, borderColor: `${EMERALD}60`, color: '#059669' }}>
+                          <CheckCircle2 size={13} strokeWidth={2.5} />
+                          <span>Paid via {order.paymentMethod}</span>
+                          {order.couponCode && (
+                            <span className="ml-2 flex items-center gap-1" style={{ color: ACCENT }}>
+                              <Ticket size={11} strokeWidth={2.5} /> {order.couponCode}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Actions */}
+                      {order.status === 'READY' && (
+                        <div className="flex gap-2 mt-3">
+                          <div
+                            className="flex-1 py-2.5 rounded-xl text-sm font-black flex items-center justify-center gap-1.5 border-2"
+                            style={{ background: '#EDE9FE', borderColor: '#C4B5FD', color: '#7C3AED' }}
+                          >
+                            <BellRing size={13} strokeWidth={2.5} /> Kitchen Complete — Proceed to Payment
+                          </div>
+                          <button
+                            onClick={() => handleEditOrder(order)}
+                            className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-black transition-all duration-200 border-2"
+                            style={{ background: ACCENT, color: '#fff', borderColor: FG, boxShadow: `3px 3px 0px 0px ${FG}` }}
+                          >
+                            <CheckCircle2 size={13} strokeWidth={2.5} /> Pay Now
+                          </button>
+                        </div>
+                      )}
+                      {(order.status === 'DRAFT' || order.status === 'SENT_TO_KITCHEN') && (
+                        <div className="flex gap-2 mt-3">
+                          <button
+                            onClick={() => handleEditOrder(order)}
+                            className="flex-1 py-2.5 rounded-xl text-sm font-black transition-all duration-200 flex items-center justify-center gap-1.5 border-2"
+                            style={{ background: ACCENT, color: '#fff', borderColor: FG, boxShadow: `3px 3px 0px 0px ${FG}` }}
+                          >
+                            <Edit3 size={13} strokeWidth={2.5} /> Edit Order
+                          </button>
+                          <button
+                            onClick={() => setCancelTarget(order.id)}
+                            className="flex-1 py-2.5 rounded-xl text-sm font-black transition-all duration-200 flex items-center justify-center gap-1.5 border-2"
+                            style={{ background: '#FEF2F2', borderColor: '#FECACA', color: '#DC2626', boxShadow: `3px 3px 0px 0px #FECACA` }}
+                          >
+                            <Trash2 size={13} strokeWidth={2.5} /> Cancel
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* Cancel confirm */}
       <ConfirmDialog
         isOpen={!!cancelTarget}
         onClose={() => setCancelTarget(null)}

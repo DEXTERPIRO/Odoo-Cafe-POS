@@ -130,4 +130,99 @@ router.get('/export-csv', verifyToken, requireEmployee, async (req, res) => {
   }
 });
 
+/* ─── XLSX Export — real Excel file from server ──────────── */
+router.get('/export-xlsx', verifyToken, requireEmployee, async (req, res) => {
+  try {
+    const XLSX = require('xlsx');
+    const { period, employeeId } = req.query;
+    let dateFilter = {};
+    if (period === 'today') { dateFilter = { gte: new Date(new Date().setHours(0,0,0,0)) }; }
+    else if (period === 'week')  { const d = new Date(); d.setDate(d.getDate() - 7); dateFilter = { gte: d }; }
+    else if (period === 'month') { const d = new Date(); d.setDate(1); dateFilter = { gte: d }; }
+
+    const where = { status: 'PAID' };
+    if (dateFilter.gte) where.createdAt = dateFilter;
+    if (employeeId) where.createdById = employeeId;
+
+    const orders = await prisma.order.findMany({
+      where,
+      include: { lines: { include: { product: { include: { category: true } } } } },
+    });
+
+    const revenue  = orders.reduce((s, o) => s + parseFloat(o.total), 0);
+    const avgOrder = orders.length > 0 ? revenue / orders.length : 0;
+
+    const productMap = {}, categoryMap = {};
+    orders.forEach(o => {
+      o.lines.forEach(l => {
+        const n = l.product.name;
+        if (!productMap[n]) productMap[n] = { name: n, qty: 0, revenue: 0 };
+        productMap[n].qty += l.quantity;
+        productMap[n].revenue += parseFloat(l.lineTotal);
+        const c = l.product.category?.name || 'Unknown';
+        if (!categoryMap[c]) categoryMap[c] = { name: c, revenue: 0 };
+        categoryMap[c].revenue += parseFloat(l.lineTotal);
+      });
+    });
+
+    const top = (map, key) => Object.values(map).sort((a,b) => b[key]-a[key]);
+    const topProducts   = top(productMap, 'revenue').slice(0,10);
+    const topCategories = top(categoryMap, 'revenue');
+    const topOrders     = [...orders].sort((a,b) => parseFloat(b.total)-parseFloat(a.total)).slice(0,10);
+    const f = n => Number(n||0).toFixed(2);
+    const date = new Date().toLocaleString('en-IN');
+
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1 — Summary
+    const wsSummary = XLSX.utils.aoa_to_sheet([
+      ['Cafe POS - Sales Report'],
+      [`Period: ${period||'all'}`, `Generated: ${date}`],
+      [],
+      ['Metric', 'Value'],
+      ['Total Orders', orders.length],
+      ['Total Revenue (Rs.)', f(revenue)],
+      ['Avg Order Value (Rs.)', f(avgOrder)],
+      ['Top Product', topProducts[0]?.name || '-'],
+    ]);
+    wsSummary['!cols'] = [{wch:28},{wch:22}];
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+
+    // Sheet 2 — Products
+    const wsP = XLSX.utils.aoa_to_sheet([
+      ['#','Product Name','Qty Sold','Revenue (Rs.)'],
+      ...topProducts.map((p,i) => [i+1, p.name, p.qty, f(p.revenue)]),
+    ]);
+    wsP['!cols'] = [{wch:5},{wch:30},{wch:12},{wch:16}];
+    XLSX.utils.book_append_sheet(wb, wsP, 'Top Products');
+
+    // Sheet 3 — Categories
+    const wsC = XLSX.utils.aoa_to_sheet([
+      ['Category','Revenue (Rs.)'],
+      ...topCategories.map(c => [c.name, f(c.revenue)]),
+    ]);
+    wsC['!cols'] = [{wch:24},{wch:16}];
+    XLSX.utils.book_append_sheet(wb, wsC, 'Categories');
+
+    // Sheet 4 — Orders
+    const wsO = XLSX.utils.aoa_to_sheet([
+      ['Order Number','Amount (Rs.)','Date & Time'],
+      ...topOrders.map(o => [o.orderNumber, f(o.total), new Date(o.createdAt).toLocaleString('en-IN')]),
+    ]);
+    wsO['!cols'] = [{wch:20},{wch:16},{wch:24}];
+    XLSX.utils.book_append_sheet(wb, wsO, 'Orders');
+
+    const filename = `cafe-pos-${period||'all'}-${new Date().toISOString().slice(0,10)}.xlsx`;
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buf.length);
+    res.send(buf);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Export failed' });
+  }
+});
+
 module.exports = router;

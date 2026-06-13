@@ -1,9 +1,25 @@
 import { useEffect, useState } from 'react';
 import api from '../../api/client';
 import toast from 'react-hot-toast';
+import { Plus, Search, User, Mail, Phone, ShoppingCart, X, Loader2 } from 'lucide-react';
+
+const BG     = '#FFFDF5';
+const WHITE  = '#FFFFFF';
+const FG     = '#1E293B';
+const MUTED  = '#64748B';
+const BORDER = '#E2E8F0';
+const ACCENT = '#8B5CF6';
+const AMBER  = '#FBBF24';
+const EMERALD= '#34D399';
+const PINK   = '#F472B6';
+const FONT_H = "'Outfit', system-ui, sans-serif";
+const FONT_B = "'Plus Jakarta Sans', system-ui, sans-serif";
 
 const fmt = (n) =>
   `₹${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const AVATAR_COLORS = [ACCENT, PINK, AMBER, EMERALD, '#60A5FA', '#F97316', '#A78BFA'];
+const avatarColor = (name) => AVATAR_COLORS[(name?.charCodeAt(0) || 0) % AVATAR_COLORS.length];
 
 export default function CustomerManagement() {
   const [customers, setCustomers] = useState([]);
@@ -41,113 +57,176 @@ export default function CustomerManagement() {
     } finally { setSaving(false); }
   };
 
+  const inputStyle = {
+    background: '#F8FAFC', border: `2px solid ${BORDER}`, color: FG,
+    borderRadius: 12, padding: '10px 12px 10px 34px', width: '100%',
+    fontSize: 14, fontFamily: FONT_B, outline: 'none',
+  };
+
   return (
-    <div className="h-full flex flex-col bg-gray-950 overflow-hidden">
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between shrink-0">
+    <div className="h-full flex flex-col overflow-hidden" style={{ background: BG, fontFamily: FONT_B }}>
+
+      {/* ── Header ── */}
+      <div className="px-5 py-4 shrink-0 flex items-center justify-between"
+           style={{ borderBottom: `2px solid ${BORDER}`, background: WHITE }}>
         <div>
-          <h2 className="text-white font-bold text-lg">Customers</h2>
-          <p className="text-gray-500 text-sm mt-0.5">{customers.length} customers</p>
+          <h2 className="font-black text-xl" style={{ color: FG, fontFamily: FONT_H }}>Customers</h2>
+          <p className="text-xs mt-0.5 font-semibold" style={{ color: MUTED }}>
+            {customers.length} customer{customers.length !== 1 ? 's' : ''}
+          </p>
         </div>
         <button
           onClick={() => setShowForm(f => !f)}
-          className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+          className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-black transition-all duration-200 border-2"
+          style={showForm
+            ? { background: WHITE, color: MUTED, borderColor: BORDER }
+            : { background: ACCENT, color: '#fff', borderColor: FG, boxShadow: `3px 3px 0px 0px ${FG}` }}
         >
-          + Add Customer
+          {showForm ? <X size={15} strokeWidth={2.5} /> : <Plus size={15} strokeWidth={2.5} />}
+          {showForm ? 'Close' : 'Add Customer'}
         </button>
       </div>
 
-      {/* Create form */}
+      {/* ── Create form ── */}
       {showForm && (
-        <form onSubmit={handleCreate} className="px-6 py-4 border-b border-gray-800 bg-gray-900 shrink-0">
-          <div className="grid grid-cols-3 gap-3">
-            <input
-              required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
-              placeholder="Full name *"
-              className="bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-orange-500"
-            />
-            <input
-              type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
-              placeholder="Email"
-              className="bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-orange-500"
-            />
-            <input
-              value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })}
-              placeholder="Phone"
-              className="bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-orange-500"
-            />
+        <form onSubmit={handleCreate} className="px-5 py-4 shrink-0"
+              style={{ borderBottom: `2px solid ${BORDER}`, background: WHITE }}>
+          <div className="grid grid-cols-3 gap-3 mb-3">
+            {[
+              { field: 'name', placeholder: 'Full name *', Icon: User, required: true },
+              { field: 'email', placeholder: 'Email', Icon: Mail, type: 'email' },
+              { field: 'phone', placeholder: 'Phone', Icon: Phone },
+            ].map(({ field, placeholder, Icon, required, type }) => (
+              <div key={field} className="relative">
+                <Icon size={13} strokeWidth={2.5} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
+                <input
+                  required={required} type={type || 'text'}
+                  value={form[field]} onChange={e => setForm({ ...form, [field]: e.target.value })}
+                  placeholder={placeholder}
+                  style={inputStyle}
+                  onFocus={e => { e.target.style.borderColor = ACCENT; e.target.style.boxShadow = `4px 4px 0px 0px ${ACCENT}`; }}
+                  onBlur={e => { e.target.style.borderColor = BORDER; e.target.style.boxShadow = 'none'; }}
+                />
+              </div>
+            ))}
           </div>
-          <div className="flex gap-2 mt-3">
-            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-800 text-gray-300 rounded-lg text-sm hover:bg-gray-700 transition">Cancel</button>
-            <button type="submit" disabled={saving} className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-medium transition disabled:opacity-50">
-              {saving ? 'Saving…' : 'Save Customer'}
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setShowForm(false)}
+              className="px-4 py-2 text-sm font-bold rounded-xl transition border-2"
+              style={{ background: WHITE, color: MUTED, borderColor: BORDER }}>
+              Cancel
+            </button>
+            <button type="submit" disabled={saving}
+              className="px-5 py-2 text-sm font-black rounded-xl transition-all duration-200 flex items-center gap-1.5 disabled:opacity-50 border-2"
+              style={{ background: ACCENT, color: '#fff', borderColor: FG, boxShadow: `3px 3px 0px 0px ${FG}`, fontFamily: FONT_H }}>
+              {saving ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : 'Save Customer'}
             </button>
           </div>
         </form>
       )}
 
-      {/* Search */}
-      <div className="px-6 py-3 shrink-0">
+      {/* ── Search ── */}
+      <div className="px-5 py-3 shrink-0" style={{ borderBottom: `2px solid ${BORDER}`, background: WHITE }}>
         <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">🔍</span>
+          <Search size={14} strokeWidth={2.5} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
           <input
             value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Search by name, email or phone…"
-            className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-orange-500"
+            className="w-full pl-9 pr-3 py-2.5 text-sm rounded-xl focus:outline-none transition"
+            style={{ background: '#F8FAFC', border: `2px solid ${BORDER}`, color: FG, fontFamily: FONT_B }}
+            onFocus={e => { e.target.style.borderColor = ACCENT; e.target.style.boxShadow = `4px 4px 0px 0px ${ACCENT}`; }}
+            onBlur={e => { e.target.style.borderColor = BORDER; e.target.style.boxShadow = 'none'; }}
           />
         </div>
       </div>
 
-      {/* List */}
-      <div className="flex-1 overflow-y-auto px-6 pb-6">
+      {/* ── Customer list ── */}
+      <div className="flex-1 overflow-y-auto px-5 py-4" style={{ background: BG }}>
         {loading ? (
-          <div className="space-y-2 pt-2">
+          <div className="space-y-2">
             {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="skeleton h-16 rounded-xl" style={{ animationDelay: `${i * 80}ms` }} />
+              <div key={i} className="h-16 rounded-xl border-2" style={{ background: WHITE, borderColor: BORDER, opacity: 0.6 }} />
             ))}
           </div>
         ) : customers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 gap-3 text-center">
-            <div className="text-5xl opacity-20">👤</div>
-            <div className="text-gray-500 font-medium">{search ? `No customers matching "${search}"` : 'No customers yet.'}</div>
-            {!search && <div className="text-gray-600 text-sm">Add your first customer using the button above.</div>}
+          <div className="flex flex-col items-center justify-center h-full min-h-[200px] gap-4 text-center">
+            <div className="w-20 h-20 rounded-2xl flex items-center justify-center border-2"
+                 style={{ background: WHITE, borderColor: BORDER, boxShadow: `4px 4px 0px 0px ${BORDER}` }}>
+              <User size={36} style={{ color: BORDER }} />
+            </div>
+            <div>
+              <div className="font-bold text-base" style={{ color: MUTED, fontFamily: FONT_H }}>
+                {search ? `No customers matching "${search}"` : 'No customers yet'}
+              </div>
+              {!search && <div className="text-sm mt-1" style={{ color: '#CBD5E1' }}>Add your first customer using the button above.</div>}
+            </div>
           </div>
         ) : (
-          <div className="space-y-2 pt-2">
-            {customers.map(c => (
-              <div key={c.id}
-                onClick={() => setSelected(selected?.id === c.id ? null : c)}
-                className="bg-gray-900 border border-gray-800 hover:border-gray-700 rounded-xl px-4 py-3 cursor-pointer transition">
-                <div className="flex items-center gap-3">
-                  {/* Avatar */}
-                  <div className="w-10 h-10 rounded-full bg-orange-500/20 border border-orange-500/30 flex items-center justify-center text-orange-400 font-bold text-sm shrink-0">
-                    {c.name?.[0]?.toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-white font-medium text-sm">{c.name}</div>
-                    <div className="text-gray-500 text-xs mt-0.5 truncate">
-                      {[c.email, c.phone].filter(Boolean).join(' · ') || 'No contact info'}
+          <div className="space-y-2">
+            {customers.map(c => {
+              const color = avatarColor(c.name);
+              const isSelected = selected?.id === c.id;
+              return (
+                <div key={c.id}
+                  onClick={() => setSelected(isSelected ? null : c)}
+                  className="rounded-xl cursor-pointer transition-all duration-200 overflow-hidden"
+                  style={{
+                    background: WHITE,
+                    border: `2px solid ${isSelected ? color : BORDER}`,
+                    boxShadow: isSelected ? `4px 4px 0px 0px ${color}` : `4px 4px 0px 0px ${BORDER}`,
+                  }}>
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    {/* Colored avatar */}
+                    <div
+                      className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-white text-sm shrink-0 border-2"
+                      style={{ background: color, borderColor: FG, boxShadow: '2px 2px 0px 0px #1E293B', fontFamily: FONT_H, color: '#fff' }}
+                    >
+                      {c.name?.[0]?.toUpperCase()}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-sm" style={{ color: FG, fontFamily: FONT_H }}>{c.name}</div>
+                      <div className="text-xs mt-0.5 truncate font-semibold" style={{ color: MUTED }}>
+                        {[c.email, c.phone].filter(Boolean).join(' · ') || 'No contact info'}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 text-xs shrink-0 font-bold px-2.5 py-1 rounded-full border-2"
+                         style={{ background: `${ACCENT}12`, borderColor: `${ACCENT}40`, color: ACCENT }}>
+                      <ShoppingCart size={11} strokeWidth={2.5} />
+                      {c.orders?.length || 0} orders
                     </div>
                   </div>
-                  <div className="text-gray-600 text-xs">
-                    {c.orders?.length || 0} orders
-                  </div>
-                </div>
 
-                {/* Expanded order history */}
-                {selected?.id === c.id && c.orders?.length > 0 && (
-                  <div className="mt-3 border-t border-gray-800 pt-3 space-y-1">
-                    <div className="text-xs text-gray-500 mb-2 uppercase font-semibold tracking-wide">Order History</div>
-                    {c.orders.slice(0, 5).map(o => (
-                      <div key={o.id} className="flex justify-between text-xs text-gray-400">
-                        <span>{o.orderNumber} · {new Date(o.createdAt).toLocaleDateString('en-IN')}</span>
-                        <span className="text-orange-400">{fmt(o.total)}</span>
+                  {/* Expanded order history */}
+                  {isSelected && c.orders?.length > 0 && (
+                    <div className="px-4 pb-3" style={{ borderTop: `2px solid ${BORDER}`, background: '#FAFAFA' }}>
+                      <div className="text-xs font-black uppercase tracking-wider py-2" style={{ color: MUTED, fontFamily: FONT_H }}>
+                        Order History
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
+                      <div className="space-y-1.5">
+                        {c.orders.slice(0, 5).map(o => (
+                          <div key={o.id} className="flex justify-between items-center text-xs">
+                            <span className="font-semibold" style={{ color: FG }}>
+                              {o.orderNumber}
+                              <span className="ml-2 font-normal" style={{ color: MUTED }}>
+                                {new Date(o.createdAt).toLocaleDateString('en-IN')}
+                              </span>
+                            </span>
+                            <span className="font-black" style={{ color: ACCENT }}>{fmt(o.total)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {isSelected && (!c.orders || c.orders.length === 0) && (
+                    <div className="px-4 py-3 text-xs font-semibold" style={{ borderTop: `2px solid ${BORDER}`, color: MUTED, background: '#FAFAFA' }}>
+                      No orders yet for this customer.
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

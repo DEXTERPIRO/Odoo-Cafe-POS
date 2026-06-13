@@ -29,6 +29,7 @@ const calcOrder = async (lines, couponCode) => {
   return { processedLines, subtotal, taxAmount, discountAmount, total };
 };
 
+
 router.get('/', verifyToken, requireEmployee, async (req, res) => {
   try {
     const { sessionId, status } = req.query;
@@ -36,7 +37,7 @@ router.get('/', verifyToken, requireEmployee, async (req, res) => {
     if (sessionId) where.sessionId = sessionId;
     if (status) where.status = status;
     const orders = await prisma.order.findMany({
-      where, include: { lines: { include: { product: true } }, customer: true, table: true, createdBy: { select: { name: true } } },
+      where, include: { lines: { include: { product: true } }, customer: true, table: true, kdsTicket: true, createdBy: { select: { name: true } } },
       orderBy: { createdAt: 'desc' }
     });
     res.json(orders);
@@ -46,11 +47,11 @@ router.get('/', verifyToken, requireEmployee, async (req, res) => {
 router.post('/', verifyToken, requireEmployee, async (req, res) => {
   try {
     const { tableId, customerId, lines, couponCode, sessionId } = req.body;
-    if (!lines?.length) return res.status(400).json({ error: 'At least one product required' });
+    const finalLines = lines || [];
     const ts = Date.now().toString().slice(-6);
     const rand = Math.floor(Math.random() * 100).toString().padStart(2, '0');
     const orderNumber = `ORD-${ts}${rand}`;
-    const { processedLines, subtotal, taxAmount, discountAmount, total } = await calcOrder(lines, couponCode);
+    const { processedLines, subtotal, taxAmount, discountAmount, total } = await calcOrder(finalLines, couponCode);
     const order = await prisma.order.create({
       data: {
         orderNumber, sessionId, tableId, customerId, couponCode,
@@ -84,9 +85,33 @@ router.put('/:id/send-kitchen', verifyToken, requireEmployee, async (req, res) =
       include: { lines: { include: { product: true } }, table: true }
     });
     let ticket = await prisma.kdsTicket.findUnique({ where: { orderId: order.id } });
-    if (!ticket) ticket = await prisma.kdsTicket.create({ data: { orderId: order.id, stage: 'TO_COOK' } });
+    const isNew = !ticket;
+    if (isNew) ticket = await prisma.kdsTicket.create({ data: { orderId: order.id, stage: 'TO_COOK' } });
+
+    // Fetch the full ticket details to match the GET /kds/tickets schema
+    const fullTicket = await prisma.kdsTicket.findUnique({
+      where: { id: ticket.id },
+      include: {
+        order: {
+          include: {
+            lines: {
+              include: {
+                product: true
+              }
+            },
+            table: true,
+            customer: true
+          }
+        }
+      }
+    });
+
     const io = req.app.get('io');
-    io.to('kds-room').emit('new-order', { ...order, kdsTicket: ticket });
+    if (isNew) {
+      io.to('kds-room').emit('new-order', fullTicket);
+    } else {
+      io.to('kds-room').emit('ticket-updated', fullTicket);
+    }
     res.json(order);
   } catch (e) { console.error(e); res.status(500).json({ error: 'Something went wrong' }); }
 });
@@ -110,8 +135,25 @@ router.put('/:id/pay', verifyToken, requireEmployee, async (req, res) => {
 
 router.put('/:id/cancel', verifyToken, requireEmployee, async (req, res) => {
   try {
+    const existing = await prisma.order.findUnique({
+      where: { id: req.params.id },
+      include: { kdsTicket: true }
+    });
+    if (!existing) return res.status(404).json({ error: 'Order not found' });
+    if (existing.status === 'READY') {
+      return res.status(400).json({ error: 'Cannot cancel an order that is ready from the kitchen. Please complete the payment.' });
+    }
+    
+    if (existing.kdsTicket) {
+      await prisma.kdsTicket.delete({ where: { id: existing.kdsTicket.id } });
+    }
+
     const order = await prisma.order.update({ where: { id: req.params.id }, data: { status: 'CANCELLED' } });
     if (order.tableId) await prisma.table.update({ where: { id: order.tableId }, data: { currentOrderId: null } });
+
+    const io = req.app.get('io');
+    io.to('kds-room').emit('order-cancelled', { orderId: order.id });
+
     res.json(order);
   } catch (e) { res.status(500).json({ error: 'Something went wrong' }); }
 });
@@ -127,15 +169,12 @@ router.put('/:id', verifyToken, requireEmployee, async (req, res) => {
     if (!existingOrder) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    if (existingOrder.status !== 'DRAFT') {
-      return res.status(400).json({ error: 'Only draft orders can be updated' });
+    if (existingOrder.status !== 'DRAFT' && existingOrder.status !== 'SENT_TO_KITCHEN' && existingOrder.status !== 'READY') {
+      return res.status(400).json({ error: 'Only draft, kitchen, or ready orders can be updated' });
     }
 
-    if (!lines?.length) {
-      return res.status(400).json({ error: 'At least one product required' });
-    }
-
-    const { processedLines, subtotal, taxAmount, discountAmount, total } = await calcOrder(lines, couponCode);
+    const finalLines = lines || [];
+    const { processedLines, subtotal, taxAmount, discountAmount, total } = await calcOrder(finalLines, couponCode);
 
     const order = await prisma.$transaction(async (tx) => {
       // Delete old lines
@@ -172,6 +211,29 @@ router.put('/:id', verifyToken, requireEmployee, async (req, res) => {
 
       return updated;
     });
+
+    // Check if there is an active KDS ticket for this order to notify the KDS room in real-time
+    const ticket = await prisma.kdsTicket.findUnique({ where: { orderId: order.id } });
+    if (ticket) {
+      const fullTicket = await prisma.kdsTicket.findUnique({
+        where: { id: ticket.id },
+        include: {
+          order: {
+            include: {
+              lines: {
+                include: {
+                  product: true
+                }
+              },
+              table: true,
+              customer: true
+            }
+          }
+        }
+      });
+      const io = req.app.get('io');
+      io.to('kds-room').emit('ticket-updated', fullTicket);
+    }
 
     res.json(order);
   } catch (e) {

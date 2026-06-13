@@ -1,4 +1,5 @@
 import Modal from './Modal';
+import { AlertTriangle } from 'lucide-react';
 
 export default function ConfirmDialog({
   isOpen,
@@ -7,29 +8,29 @@ export default function ConfirmDialog({
   title = 'Are you sure?',
   message = 'This action cannot be undone.',
   confirmLabel = 'Delete',
-  confirmClass = 'bg-red-500 hover:bg-red-600',
+  confirmClass = 'bg-rose-500 hover:bg-rose-600',
   loading = false,
-  icon = '🗑️',
+  icon = <AlertTriangle size={24} className="text-rose-500" />,
 }) {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm">
       <div className="flex flex-col items-center text-center gap-4">
-        <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center text-3xl">
+        <div className="w-16 h-16 rounded-full bg-slate-50 border-2 border-slate-200 flex items-center justify-center text-slate-600">
           {icon}
         </div>
-        <p className="text-gray-300 text-sm leading-relaxed">{message}</p>
-        <div className="flex gap-3 w-full pt-1">
+        <p className="text-slate-600 text-sm leading-relaxed font-jakarta font-medium">{message}</p>
+        <div className="flex gap-4 w-full pt-2 font-outfit">
           <button
             onClick={onClose}
             disabled={loading}
-            className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2.5 rounded-xl text-sm font-medium transition disabled:opacity-50"
+            className="flex-1 bg-white hover:bg-slate-50 text-slate-800 border-2 border-slate-800 py-2.5 rounded-xl text-sm font-bold shadow-pop-sm transition disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
             disabled={loading}
-            className={`flex-1 text-white py-2.5 rounded-xl text-sm font-semibold transition disabled:opacity-50 ${confirmClass}`}
+            className={`flex-1 text-white border-2 border-slate-800 py-2.5 rounded-xl text-sm font-bold shadow-pop-sm transition disabled:opacity-50 ${confirmClass}`}
           >
             {loading ? 'Please wait…' : confirmLabel}
           </button>

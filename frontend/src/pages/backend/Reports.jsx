@@ -3,19 +3,26 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   PieChart, Pie, Cell, ResponsiveContainer
 } from 'recharts';
+import * as XLSX from 'xlsx';
 import api from '../../api/client';
 import toast from 'react-hot-toast';
+import {
+  BarChart3, Clipboard, Coins, Trophy, CreditCard, Tag,
+  Printer, FileSpreadsheet, FileText, AlertTriangle
+} from 'lucide-react';
 
 const fmt = (n) => `\u20b9${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const ru  = (n) => Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 });
 
-const StatCard = ({ label, value, icon, iconBg, sub }) => (
-  <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 flex items-center gap-4">
-    <div className={`w-12 h-12 flex items-center justify-center rounded-xl text-2xl shrink-0 ${iconBg}`}>{icon}</div>
+const StatCard = ({ label, value, icon: Icon, iconBg, iconColor, sub }) => (
+  <div className="bg-white border-2 border-slate-800 rounded-2xl p-5 flex items-center gap-4 shadow-pop-sm">
+    <div className={`w-12 h-12 flex items-center justify-center border-2 border-slate-800 rounded-xl shadow-pop-sm shrink-0 ${iconBg} ${iconColor}`}>
+      {Icon && <Icon size={20} strokeWidth={2.5} />}
+    </div>
     <div className="min-w-0">
-      <div className="text-xs text-gray-500 uppercase tracking-wide">{label}</div>
-      <div className="text-xl font-bold text-white mt-0.5 truncate">{value}</div>
-      {sub && <div className="text-xs text-gray-500 mt-0.5">{sub}</div>}
+      <div className="text-xs text-slate-500 font-bold uppercase tracking-wide">{label}</div>
+      <div className="text-xl font-black text-slate-800 mt-0.5 truncate font-outfit">{value}</div>
+      {sub && <div className="text-xs text-slate-400 font-semibold mt-0.5">{sub}</div>}
     </div>
   </div>
 );
@@ -23,10 +30,10 @@ const StatCard = ({ label, value, icon, iconBg, sub }) => (
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 text-sm shadow-xl">
-      <p className="text-gray-400 mb-1">{label}</p>
-      <p className="text-orange-400 font-semibold">{fmt(payload[0]?.value)}</p>
-      {payload[1] && <p className="text-blue-400">{payload[1].value} orders</p>}
+    <div className="bg-white border-2 border-slate-800 rounded-xl p-3 text-sm shadow-pop-sm text-slate-800">
+      <p className="text-slate-400 mb-1 font-bold">{label}</p>
+      <p className="text-[#8B5CF6] font-black">{fmt(payload[0]?.value)}</p>
+      {payload[1] && <p className="text-blue-500 font-semibold">{payload[1].value} orders</p>}
     </div>
   );
 };
@@ -112,7 +119,7 @@ export default function Reports() {
     finally { setLoading(false); }
   }, [period, employeeId]);
 
-  /* ── PDF: hidden iframe approach (no popup blocker) ──── */
+  /* ── PDF: hidden iframe (no popup blocker) ──────────── */
   const handleExportPDF = () => {
     if (!data) return toast.error('No report data to export');
     const old = document.getElementById('__print_frame__');
@@ -145,32 +152,118 @@ export default function Reports() {
     toast.success('Print dialog opening…');
   };
 
-  /* ── CSV: axios (auto token) + responseType blob ────── */
+  /* ── Build xlsx workbook from data ── */
+  const buildWorkbook = () => {
+    const f  = n => Number(n||0).toFixed(2);
+    const wb = XLSX.utils.book_new();
+    const ws1 = XLSX.utils.aoa_to_sheet([
+      ['Cafe POS — Sales Report', '', `Period: ${period}`],
+      ['Generated:', new Date().toLocaleString('en-IN')],
+      [],
+      ['Metric','Value'],
+      ['Total Orders', data.totalOrders],
+      ['Total Revenue (Rs.)', f(data.revenue)],
+      ['Avg Order Value (Rs.)', f(data.avgOrderValue)],
+      ['Top Product', data.topProducts?.[0]?.name||'-'],
+    ]);
+    ws1['!cols']=[{wch:26},{wch:22}];
+    XLSX.utils.book_append_sheet(wb, ws1, 'Summary');
+    const ws2 = XLSX.utils.aoa_to_sheet([
+      ['#','Product','Qty Sold','Revenue (Rs.)'],
+      ...(data.topProducts||[]).map((p,i)=>[i+1,p.name,p.qty,f(p.revenue)]),
+    ]);
+    ws2['!cols']=[{wch:4},{wch:28},{wch:10},{wch:16}];
+    XLSX.utils.book_append_sheet(wb, ws2, 'Top Products');
+    const ws3 = XLSX.utils.aoa_to_sheet([
+      ['Category','Revenue (Rs.)'],
+      ...(data.topCategories||[]).map(c=>[c.name,f(c.revenue)]),
+    ]);
+    ws3['!cols']=[{wch:22},{wch:16}];
+    XLSX.utils.book_append_sheet(wb, ws3, 'Categories');
+    const ws4 = XLSX.utils.aoa_to_sheet([
+      ['Order #','Amount (Rs.)','Date & Time'],
+      ...(data.topOrders||[]).map(o=>[o.orderNumber,f(o.total),new Date(o.createdAt).toLocaleString('en-IN')]),
+    ]);
+    ws4['!cols']=[{wch:20},{wch:16},{wch:24}];
+    XLSX.utils.book_append_sheet(wb, ws4, 'Orders');
+    return wb;
+  };
+
+  /* ── Build CSV string from data ── */
+  const buildCSV = () => {
+    const f = n => Number(n||0).toFixed(2);
+    const q = v => `"${String(v??'').replace(/"/g,'""')}"`;
+    return '\uFEFF' + [
+      ['Cafe POS Report',`Period:${period}`,`Generated:${new Date().toLocaleString('en-IN')}`],
+      [],['SUMMARY'],
+      ['Total Orders',data.totalOrders],
+      ['Total Revenue (Rs.)',f(data.revenue)],
+      ['Avg Order Value (Rs.)',f(data.avgOrderValue)],
+      [],['TOP PRODUCTS'],['#','Product','Qty Sold','Revenue (Rs.)'],
+      ...(data.topProducts||[]).map((p,i)=>[i+1,p.name,p.qty,f(p.revenue)]),
+      [],['TOP CATEGORIES'],['Category','Revenue (Rs.)'],
+      ...(data.topCategories||[]).map(c=>[c.name,f(c.revenue)]),
+      [],['TOP ORDERS'],['Order #','Amount (Rs.)','Date & Time'],
+      ...(data.topOrders||[]).map(o=>[o.orderNumber,f(o.total),new Date(o.createdAt).toLocaleString('en-IN')]),
+    ].map(r=>r.map(q).join(',')).join('\r\n');
+  };
+
+  /* ── Export XLS via native Save-As dialog ── */
   const handleExportXLS = async () => {
+    if (!data) return toast.error('Load a report first');
     try {
-      const params = new URLSearchParams({ period });
-      if (employeeId) params.set('employeeId', employeeId);
+      const wb  = buildWorkbook();
+      const buf = XLSX.write(wb, { bookType:'xlsx', type:'array' });
+      const blob = new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const name = `cafe-pos-${period}-${new Date().toISOString().slice(0,10)}.xlsx`;
 
-      // axios interceptor automatically adds Bearer token
-      // responseType: 'blob' makes axios return the raw binary data
-      const blob = await api.get(`/reports/export-csv?${params}`, {
-        responseType: 'blob',
-      });
-
-      const filename = `cafe-pos-${period}-${new Date().toISOString().slice(0,10)}.csv`;
-      const url  = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href      = url;
-      link.download  = filename;
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      setTimeout(() => { document.body.removeChild(link); URL.revokeObjectURL(url); }, 3000);
-
-      toast.success('CSV downloaded!');
+      if ('showSaveFilePicker' in window) {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: name,
+          types: [{ description:'Excel Workbook', accept:{ 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx'] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        toast.success('Excel file saved!');
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a   = Object.assign(document.createElement('a'), { href:url, download:name });
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(()=>URL.revokeObjectURL(url), 10000);
+        toast.success('Excel downloaded!');
+      }
     } catch (e) {
-      console.error('CSV export error:', e);
-      toast.error('Export failed: ' + (e?.message || 'Unknown error'));
+      if (e.name !== 'AbortError') toast.error('Export failed: ' + e.message);
+    }
+  };
+
+  /* ── Export CSV via native Save-As dialog ── */
+  const handleExportCSV = async () => {
+    if (!data) return toast.error('Load a report first');
+    try {
+      const csv  = buildCSV();
+      const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+      const name = `cafe-pos-${period}-${new Date().toISOString().slice(0,10)}.csv`;
+
+      if ('showSaveFilePicker' in window) {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: name,
+          types: [{ description:'CSV File', accept:{ 'text/csv':['.csv'] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        toast.success('CSV file saved!');
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a   = Object.assign(document.createElement('a'), { href:url, download:name });
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(()=>URL.revokeObjectURL(url), 10000);
+        toast.success('CSV downloaded!');
+      }
+    } catch (e) {
+      if (e.name !== 'AbortError') toast.error('Export failed: ' + e.message);
     }
   };
 
@@ -178,12 +271,17 @@ export default function Reports() {
 
   return (
     <div>
+      <div className="flex items-center gap-2 mb-6">
+        <BarChart3 size={24} className="text-[#34D399]" />
+        <h1 className="text-2xl font-black text-slate-800 font-outfit">Reports & Analytics</h1>
+      </div>
+
       {/* ── Filters Bar ── */}
-      <div className="flex flex-wrap items-end gap-3 mb-6 bg-gray-900 border border-gray-800 rounded-xl p-4">
+      <div className="flex flex-wrap items-end gap-4 mb-6 bg-white border-2 border-slate-800 rounded-2xl p-5 shadow-pop-sm">
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Period</label>
+          <label className="block text-xs font-bold text-slate-500 uppercase mb-1 px-0.5">Period</label>
           <select value={period} onChange={e => setPeriod(e.target.value)}
-            className="bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-orange-500">
+            className="bg-white border-2 border-slate-200 text-slate-800 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-[#34D399] font-semibold transition">
             <option value="today">Today</option>
             <option value="week">This Week</option>
             <option value="month">This Month</option>
@@ -193,84 +291,93 @@ export default function Reports() {
         {period === 'custom' && (
           <>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">From</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1 px-0.5">From</label>
               <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
-                className="bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-orange-500" />
+                className="bg-white border-2 border-slate-200 text-slate-800 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-[#34D399] font-semibold transition" />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">To</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1 px-0.5">To</label>
               <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)}
-                className="bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-orange-500" />
+                className="bg-white border-2 border-slate-200 text-slate-800 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-[#34D399] font-semibold transition" />
             </div>
           </>
         )}
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Employee</label>
+          <label className="block text-xs font-bold text-slate-500 uppercase mb-1 px-0.5">Employee</label>
           <select value={employeeId} onChange={e => setEmployeeId(e.target.value)}
-            className="bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-orange-500">
+            className="bg-white border-2 border-slate-200 text-slate-800 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-[#34D399] font-semibold transition">
             <option value="">All Employees</option>
             {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
           </select>
         </div>
         <button onClick={fetchReport} disabled={loading}
-          className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50">
+          className="bg-[#34D399] hover:bg-[#28b380] text-slate-900 border-2 border-slate-800 px-5 py-2.5 rounded-xl text-sm font-bold shadow-pop-sm hover:translate-y-[-2px] active:translate-y-[2px] transition-all disabled:opacity-50">
           {loading ? 'Loading…' : 'Apply Filters'}
         </button>
         <div className="flex gap-2 ml-auto">
           <button onClick={handleExportPDF}
-            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition">
-            🖨️ Export PDF
+            className="bg-rose-500 hover:bg-rose-600 text-white border-2 border-slate-800 px-4 py-2.5 rounded-xl text-sm font-bold shadow-pop-sm hover:translate-y-[-2px] active:translate-y-[2px] transition-all flex items-center gap-2">
+            <Printer size={15} /> Export PDF
           </button>
           <button onClick={handleExportXLS}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition">
-            📊 Export CSV/XLS
+            className="bg-emerald-500 hover:bg-emerald-600 text-white border-2 border-slate-800 px-4 py-2.5 rounded-xl text-sm font-bold shadow-pop-sm hover:translate-y-[-2px] active:translate-y-[2px] transition-all flex items-center gap-2">
+            <FileSpreadsheet size={15} /> Export XLS
+          </button>
+          <button onClick={handleExportCSV}
+            className="bg-sky-500 hover:bg-sky-600 text-white border-2 border-slate-800 px-4 py-2.5 rounded-xl text-sm font-bold shadow-pop-sm hover:translate-y-[-2px] active:translate-y-[2px] transition-all flex items-center gap-2">
+            <FileText size={15} /> Export CSV
           </button>
         </div>
       </div>
 
       {loading && !data && (
-        <div className="flex items-center justify-center h-64 text-gray-400">Loading report…</div>
+        <div className="flex items-center justify-center h-64 text-slate-500 font-semibold">Loading report…</div>
       )}
 
       {data && (
         <>
           {/* ── Stat Cards ── */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <StatCard label="Total Orders"    value={data.totalOrders}        icon="📋" iconBg="bg-blue-500/20"   sub={`Period: ${period}`} />
-            <StatCard label="Total Revenue"   value={fmt(data.revenue)}       icon="💰" iconBg="bg-green-500/20"  sub="Paid orders only" />
-            <StatCard label="Avg Order Value" value={fmt(data.avgOrderValue)} icon="📊" iconBg="bg-orange-500/20" />
-            <StatCard label="Top Product"     value={topProduct}              icon="🏆" iconBg="bg-purple-500/20" sub={data.topProducts?.[0] ? `${data.topProducts[0].qty} sold` : ''} />
+            <StatCard label="Total Orders"    value={data.totalOrders}        icon={Clipboard} iconBg="bg-blue-50" iconColor="text-blue-500" sub={`Period: ${period}`} />
+            <StatCard label="Total Revenue"   value={fmt(data.revenue)}       icon={Coins} iconBg="bg-green-55" iconColor="text-emerald-500" sub="Paid orders only" />
+            <StatCard label="Avg Order Value" value={fmt(data.avgOrderValue)} icon={BarChart3} iconBg="bg-orange-50" iconColor="text-amber-500" />
+            <StatCard label="Top Product"     value={topProduct}              icon={Trophy} iconBg="bg-violet-50" iconColor="text-violet-500" sub={data.topProducts?.[0] ? `${data.topProducts[0].qty} sold` : ''} />
           </div>
 
           {/* ── Charts ── */}
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-6">
-            <div className="lg:col-span-3 bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <h2 className="text-white font-semibold mb-4">
-                Revenue Trend <span className="text-gray-500 text-xs font-normal ml-2">Last 7 days</span>
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
+            <div className="lg:col-span-3 bg-white border-2 border-slate-800 rounded-2xl p-5 shadow-pop-sm text-slate-800">
+              <h2 className="text-slate-800 font-black font-outfit mb-4 flex items-center gap-1.5">
+                <BarChart3 size={18} className="text-[#34D399]" />
+                <span>Revenue Trend</span>
+                <span className="text-slate-400 text-xs font-bold ml-2 font-jakarta">Last 7 days</span>
               </h2>
               {data.trendData?.length > 0 ? (
                 <ResponsiveContainer width="100%" height={220}>
                   <LineChart data={data.trendData} margin={{ top:5, right:10, left:0, bottom:5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                    <XAxis dataKey="date" tick={{ fill:'#9CA3AF', fontSize:11 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill:'#9CA3AF', fontSize:11 }} axisLine={false} tickLine={false}
-                      tickFormatter={v => `\u20b9${v}`} width={60} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+                    <XAxis dataKey="date" tick={{ fill:'#64748B', fontSize:11, fontWeight:600 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill:'#64748B', fontSize:11, fontWeight:600 }} axisLine={false} tickLine={false}
+                      tickFormatter={v => `₹${v}`} width={60} />
                     <Tooltip content={<CustomTooltip />} />
-                    <Line type="monotone" dataKey="revenue" stroke="#F97316" strokeWidth={2.5} dot={{ fill:'#F97316', r:4 }} activeDot={{ r:6 }} />
-                    <Line type="monotone" dataKey="orders"  stroke="#3B82F6" strokeWidth={1.5} dot={{ fill:'#3B82F6', r:3 }} strokeDasharray="4 2" />
+                    <Line type="monotone" dataKey="revenue" stroke="#F97316" strokeWidth={3} dot={{ fill:'#F97316', r:4, strokeWidth:1, stroke:'#FFF' }} activeDot={{ r:6 }} />
+                    <Line type="monotone" dataKey="orders"  stroke="#3B82F6" strokeWidth={2} dot={{ fill:'#3B82F6', r:3, strokeWidth:1, stroke:'#FFF' }} strokeDasharray="4 2" />
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-48 flex items-center justify-center text-gray-600">No trend data</div>
+                <div className="h-48 flex items-center justify-center text-slate-400 font-semibold">No trend data</div>
               )}
-              <div className="flex gap-4 mt-2 text-xs text-gray-500">
-                <span className="flex items-center gap-1.5"><span className="w-4 h-0.5 bg-orange-500 inline-block rounded" /> Revenue</span>
-                <span className="flex items-center gap-1.5"><span className="w-4 h-0.5 bg-blue-500 inline-block rounded" /> Orders</span>
+              <div className="flex gap-4 mt-2 text-xs text-slate-500 font-bold px-1">
+                <span className="flex items-center gap-1.5"><span className="w-4 h-1 bg-orange-500 inline-block rounded" /> Revenue</span>
+                <span className="flex items-center gap-1.5"><span className="w-4 h-1 bg-blue-500 inline-block rounded" /> Orders</span>
               </div>
             </div>
 
-            <div className="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <h2 className="text-white font-semibold mb-4">Sales by Category</h2>
+            <div className="lg:col-span-2 bg-white border-2 border-slate-800 rounded-2xl p-5 shadow-pop-sm text-slate-800">
+              <h2 className="text-slate-800 font-black font-outfit mb-4 flex items-center gap-1.5">
+                <Tag size={18} className="text-[#8B5CF6]" />
+                <span>Sales by Category</span>
+              </h2>
               {data.topCategories?.length > 0 ? (
                 <>
                   <ResponsiveContainer width="100%" height={180}>
@@ -281,102 +388,105 @@ export default function Reports() {
                           <Cell key={i} fill={c.color || `hsl(${i*60},65%,55%)`} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={v => fmt(v)} contentStyle={{ background:'#1F2937', border:'1px solid #374151', borderRadius:8, color:'#fff' }} />
+                      <Tooltip formatter={v => fmt(v)} contentStyle={{ background:'#FFFFFF', border:'2px solid #1E293B', borderRadius:12, color:'#1E293B' }} />
                     </PieChart>
                   </ResponsiveContainer>
-                  <div className="mt-3 space-y-1.5">
+                  <div className="mt-3 space-y-1.5 max-h-36 overflow-y-auto">
                     {data.topCategories.slice(0,5).map((c,i) => (
-                      <div key={i} className="flex items-center justify-between text-xs">
+                      <div key={i} className="flex items-center justify-between text-xs font-semibold">
                         <span className="flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: c.color || `hsl(${i*60},65%,55%)` }} />
-                          <span className="text-gray-300">{c.name}</span>
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0 border border-slate-800 shadow-pop-sm" style={{ backgroundColor: c.color || `hsl(${i*60},65%,55%)` }} />
+                          <span className="text-slate-600">{c.name}</span>
                         </span>
-                        <span className="text-gray-400 font-mono">{fmt(c.revenue)}</span>
+                        <span className="text-slate-800 font-bold font-mono">{fmt(c.revenue)}</span>
                       </div>
                     ))}
                   </div>
                 </>
               ) : (
-                <div className="h-48 flex items-center justify-center text-gray-600">No category data</div>
+                <div className="h-48 flex items-center justify-center text-slate-400 font-semibold">No category data</div>
               )}
             </div>
           </div>
 
           {/* ── Tables ── */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-800">
-                <h3 className="text-white font-semibold text-sm">🏅 Top Products</h3>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="bg-white border-2 border-slate-800 rounded-2xl overflow-hidden shadow-pop-sm">
+              <div className="px-4 py-3 bg-slate-50 border-b-2 border-slate-800 flex items-center gap-2">
+                <Trophy size={16} className="text-amber-500" />
+                <h3 className="text-slate-800 font-bold font-outfit text-sm">Top Products</h3>
               </div>
               <table className="w-full">
-                <thead><tr className="text-xs text-gray-600 uppercase border-b border-gray-800">
-                  <th className="px-4 py-2 text-left">#</th>
-                  <th className="px-4 py-2 text-left">Product</th>
-                  <th className="px-4 py-2 text-right">Qty</th>
-                  <th className="px-4 py-2 text-right">Revenue</th>
+                <thead><tr className="text-xs text-slate-500 uppercase border-b-2 border-slate-100 font-bold">
+                  <th className="px-4 py-2.5 text-left font-bold">#</th>
+                  <th className="px-4 py-2.5 text-left font-bold">Product</th>
+                  <th className="px-4 py-2.5 text-right font-bold">Qty</th>
+                  <th className="px-4 py-2.5 text-right font-bold">Revenue</th>
                 </tr></thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-100">
                   {(data.topProducts||[]).map((p,i) => (
-                    <tr key={i} className={`text-sm ${i%2===0?'bg-gray-900':'bg-gray-800/40'}`}>
-                      <td className="px-4 py-2.5 text-gray-500 font-mono">{i+1}</td>
-                      <td className="px-4 py-2.5 text-gray-200">{p.name}</td>
-                      <td className="px-4 py-2.5 text-right text-gray-400">{p.qty}</td>
-                      <td className="px-4 py-2.5 text-right text-orange-400 font-medium">{fmt(p.revenue)}</td>
+                    <tr key={i} className="hover:bg-slate-50/50 transition">
+                      <td className="px-4 py-2.5 text-slate-400 font-mono font-bold">{i+1}</td>
+                      <td className="px-4 py-2.5 text-slate-800 font-bold">{p.name}</td>
+                      <td className="px-4 py-2.5 text-right text-slate-500 font-semibold">{p.qty}</td>
+                      <td className="px-4 py-2.5 text-right text-[#8B5CF6] font-black">{fmt(p.revenue)}</td>
                     </tr>
                   ))}
-                  {!data.topProducts?.length && <tr><td colSpan={4} className="px-4 py-6 text-center text-gray-600 text-xs">No data</td></tr>}
+                  {!data.topProducts?.length && <tr><td colSpan={4} className="px-4 py-6 text-center text-slate-400 text-xs font-semibold">No data</td></tr>}
                 </tbody>
               </table>
             </div>
 
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-800">
-                <h3 className="text-white font-semibold text-sm">💳 Highest Orders</h3>
+            <div className="bg-white border-2 border-slate-800 rounded-2xl overflow-hidden shadow-pop-sm">
+              <div className="px-4 py-3 bg-slate-50 border-b-2 border-slate-800 flex items-center gap-2">
+                <CreditCard size={16} className="text-violet-500" />
+                <h3 className="text-slate-800 font-bold font-outfit text-sm">Highest Orders</h3>
               </div>
               <table className="w-full">
-                <thead><tr className="text-xs text-gray-600 uppercase border-b border-gray-800">
-                  <th className="px-4 py-2 text-left">Order #</th>
-                  <th className="px-4 py-2 text-right">Amount</th>
-                  <th className="px-4 py-2 text-right">Time</th>
+                <thead><tr className="text-xs text-slate-500 uppercase border-b-2 border-slate-100 font-bold">
+                  <th className="px-4 py-2.5 text-left font-bold">Order #</th>
+                  <th className="px-4 py-2.5 text-right font-bold">Amount</th>
+                  <th className="px-4 py-2.5 text-right font-bold">Time</th>
                 </tr></thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-100">
                   {(data.topOrders||[]).map((o,i) => (
-                    <tr key={o.id} className={`text-sm ${i%2===0?'bg-gray-900':'bg-gray-800/40'}`}>
-                      <td className="px-4 py-2.5 text-blue-400 font-mono text-xs">{o.orderNumber}</td>
-                      <td className="px-4 py-2.5 text-right text-white font-semibold">{fmt(o.total)}</td>
-                      <td className="px-4 py-2.5 text-right text-gray-500 text-xs">
+                    <tr key={o.id} className="hover:bg-slate-50/50 transition">
+                      <td className="px-4 py-2.5 text-blue-500 font-mono font-bold text-xs">{o.orderNumber}</td>
+                      <td className="px-4 py-2.5 text-right text-slate-800 font-black">{fmt(o.total)}</td>
+                      <td className="px-4 py-2.5 text-right text-slate-400 font-semibold text-xs">
                         {new Date(o.createdAt).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}
                       </td>
                     </tr>
                   ))}
-                  {!data.topOrders?.length && <tr><td colSpan={3} className="px-4 py-6 text-center text-gray-600 text-xs">No data</td></tr>}
+                  {!data.topOrders?.length && <tr><td colSpan={3} className="px-4 py-6 text-center text-slate-400 text-xs font-semibold">No data</td></tr>}
                 </tbody>
               </table>
             </div>
 
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-800">
-                <h3 className="text-white font-semibold text-sm">🏷️ Sales by Category</h3>
+            <div className="bg-white border-2 border-slate-800 rounded-2xl overflow-hidden shadow-pop-sm">
+              <div className="px-4 py-3 bg-slate-50 border-b-2 border-slate-800 flex items-center gap-2">
+                <Tag size={16} className="text-pink-500" />
+                <h3 className="text-slate-800 font-bold font-outfit text-sm">Sales by Category</h3>
               </div>
               <table className="w-full">
-                <thead><tr className="text-xs text-gray-600 uppercase border-b border-gray-800">
-                  <th className="px-4 py-2 text-left">Category</th>
-                  <th className="px-4 py-2 text-right">Revenue</th>
+                <thead><tr className="text-xs text-slate-500 uppercase border-b-2 border-slate-100 font-bold">
+                  <th className="px-4 py-2.5 text-left font-bold">Category</th>
+                  <th className="px-4 py-2.5 text-right font-bold">Revenue</th>
                 </tr></thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-100">
                   {(data.topCategories||[]).map((c,i) => (
-                    <tr key={i} className={`text-sm ${i%2===0?'bg-gray-900':'bg-gray-800/40'}`}>
+                    <tr key={i} className="hover:bg-slate-50/50 transition">
                       <td className="px-4 py-2.5">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-white"
-                          style={{ backgroundColor:(c.color||'#6B7280')+'33', border:`1px solid ${c.color||'#6B7280'}55` }}>
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
+                          style={{ backgroundColor:(c.color||'#6B7280')+'15', color:(c.color||'#6b7280'), border:`1px solid ${c.color||'#6b7280'}33` }}>
                           <span className="w-2 h-2 rounded-full" style={{ backgroundColor: c.color||'#6B7280' }} />
                           {c.name}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 text-right text-green-400 font-medium">{fmt(c.revenue)}</td>
+                      <td className="px-4 py-2.5 text-right text-emerald-600 font-bold">{fmt(c.revenue)}</td>
                     </tr>
                   ))}
-                  {!data.topCategories?.length && <tr><td colSpan={2} className="px-4 py-6 text-center text-gray-600 text-xs">No data</td></tr>}
+                  {!data.topCategories?.length && <tr><td colSpan={2} className="px-4 py-6 text-center text-slate-400 text-xs font-semibold">No data</td></tr>}
                 </tbody>
               </table>
             </div>

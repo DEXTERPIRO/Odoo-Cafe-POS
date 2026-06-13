@@ -10,29 +10,6 @@ const productValidation = validate({
   price:      [v.required, v.isPositive],
 });
 
-// PUBLIC route — no auth required (for QR menu)
-router.get('/public-menu', async (req, res) => {
-  try {
-    const categories = await prisma.productCategory.findMany({
-      where: { isActive: true },
-      include: {
-        products: {
-          where: { isActive: true },
-          select: {
-            id: true, name: true, price: true,
-            description: true, unitOfMeasure: true, tax: true,
-          },
-          orderBy: { name: 'asc' },
-        },
-      },
-      orderBy: { name: 'asc' },
-    });
-    res.json(categories);
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Something went wrong' });
-  }
-});
 
 router.get('/', verifyToken, async (req, res) => {
   try {
@@ -148,7 +125,7 @@ router.put('/:id', verifyToken, requireAdmin, async (req, res) => {
 
 router.delete('/:id', verifyToken, requireAdmin, async (req, res) => {
   try {
-    await prisma.product.update({ where: { id: req.params.id }, data: { isActive: false } });
+    const product = await prisma.product.update({ where: { id: req.params.id }, data: { isActive: false } });
     res.json({ message: 'Product deactivated' });
   } catch (e) {
     console.error(e);

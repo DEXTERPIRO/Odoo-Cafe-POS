@@ -36,6 +36,7 @@ enum SessionStatus {
 enum OrderStatus {
   DRAFT
   SENT_TO_KITCHEN
+  READY
   PAID
   CANCELLED
 }

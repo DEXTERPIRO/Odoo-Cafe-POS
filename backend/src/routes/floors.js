@@ -7,10 +7,28 @@ router.get('/', verifyToken, async (req, res) => {
   try {
     const floors = await prisma.floor.findMany({
       where: { isActive: true },
-      include: { tables: { where: { isActive: true } } }
+      include: {
+        tables: {
+          where: { isActive: true },
+          include: {
+            orders: {
+              where: {
+                status: { in: ['DRAFT', 'SENT_TO_KITCHEN', 'READY'] }
+              },
+              include: {
+                lines: { include: { product: true } },
+                customer: true
+              }
+            }
+          }
+        }
+      }
     });
     res.json(floors);
-  } catch (e) { res.status(500).json({ error: 'Something went wrong' }); }
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
 });
 
 router.post('/', verifyToken, requireAdmin, async (req, res) => {

@@ -1,103 +1,25 @@
 import { useEffect, useState } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
+
 import api from '../../api/client';
 import toast from 'react-hot-toast';
+import { LayoutGrid, Plus, Trash2, X, User } from 'lucide-react';
 
 function Modal({ title, onClose, children }) {
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md">
-        <div className="flex items-center justify-between p-6 border-b border-gray-800">
-          <h2 className="text-lg font-semibold text-white">{title}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-2xl leading-none">×</button>
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white border-2 border-slate-800 rounded-2xl w-full max-w-md shadow-pop-lg animate-popIn">
+        <div className="flex items-center justify-between p-5 border-b-2 border-slate-100">
+          <h2 className="text-lg font-bold text-slate-800 font-outfit">{title}</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-800 transition">
+            <X size={20} />
+          </button>
         </div>
-        <div className="p-6">{children}</div>
+        <div className="p-5">{children}</div>
       </div>
     </div>
   );
 }
 
-function QRModal({ table, onClose }) {
-  const menuUrl = `${window.location.origin}/menu?table=${encodeURIComponent(table.tableNumber)}`;
-
-  const handlePrint = () => {
-    const printWin = window.open('', '_blank', 'width=400,height=500');
-    printWin.document.write(`
-      <html>
-        <head>
-          <title>QR — Table ${table.tableNumber}</title>
-          <style>
-            body { margin: 0; display: flex; flex-direction: column; align-items: center;
-                   justify-content: center; min-height: 100vh; font-family: sans-serif;
-                   background: #fff; color: #111; }
-            h2  { font-size: 22px; margin-bottom: 4px; }
-            p   { color: #666; font-size: 13px; margin-bottom: 20px; }
-            svg { display: block; }
-            small { margin-top: 16px; font-size: 11px; color: #aaa; word-break: break-all; max-width: 300px; text-align: center; }
-          </style>
-        </head>
-        <body>
-          <h2>Table ${table.tableNumber}</h2>
-          <p>Scan to view the menu</p>
-          <div id="qr"></div>
-          <small>${menuUrl}</small>
-          <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
-          <script>
-            QRCode.toCanvas(document.createElement('canvas'), '${menuUrl}', { width: 260 }, function(err, canvas) {
-              if (!err) document.getElementById('qr').appendChild(canvas);
-              setTimeout(() => { window.print(); window.close(); }, 500);
-            });
-          </script>
-        </body>
-      </html>
-    `);
-    printWin.document.close();
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm">
-        <div className="flex items-center justify-between p-5 border-b border-gray-800">
-          <h2 className="text-lg font-semibold text-white">QR Code — Table {table.tableNumber}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-2xl leading-none">×</button>
-        </div>
-        <div className="p-6 flex flex-col items-center gap-4">
-          {/* QR code on white background */}
-          <div className="bg-white p-4 rounded-xl shadow-lg">
-            <QRCodeSVG
-              value={menuUrl}
-              size={200}
-              bgColor="#ffffff"
-              fgColor="#111111"
-              level="M"
-            />
-          </div>
-          <div className="text-center">
-            <p className="text-white font-semibold text-sm">Table {table.tableNumber}</p>
-            <p className="text-gray-500 text-xs mt-1">Scan to view menu</p>
-          </div>
-          <div className="bg-gray-800 rounded-lg px-3 py-2 text-xs text-gray-400 break-all text-center max-w-full">
-            {menuUrl}
-          </div>
-          <div className="flex gap-3 w-full">
-            <button
-              onClick={() => { navigator.clipboard.writeText(menuUrl); toast.success('Link copied!'); }}
-              className="flex-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white py-2 rounded-lg text-sm transition flex items-center justify-center gap-2"
-            >
-              📋 Copy Link
-            </button>
-            <button
-              onClick={handlePrint}
-              className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2"
-            >
-              🖨️ Print QR
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function Tables() {
   const [floors, setFloors] = useState([]);
@@ -107,7 +29,7 @@ export default function Tables() {
   const [modal, setModal] = useState(null);
   const [tableForm, setTableForm] = useState({ tableNumber: '', seats: 4, floorId: '' });
   const [floorName, setFloorName] = useState('');
-  const [qrTable, setQrTable] = useState(null);
+
 
   const load = async () => {
     try {
@@ -144,30 +66,48 @@ export default function Tables() {
     catch { toast.error('Failed'); }
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading...</div>;
+  if (loading) return <div className="flex items-center justify-center h-64 text-slate-500 font-semibold">Loading...</div>;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-white">Floor & Tables</h1>
-        <button onClick={() => setModal('addFloor')} className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-medium transition">+ Add Floor</button>
+        <div className="flex items-center gap-2">
+          <LayoutGrid size={24} className="text-[#8B5CF6]" />
+          <h1 className="text-2xl font-black text-slate-800 font-outfit">Floor & Tables</h1>
+        </div>
+        <button
+          onClick={() => setModal('addFloor')}
+          className="bg-[#8B5CF6] hover:bg-[#7c4ee4] text-white border-2 border-slate-800 rounded-xl font-bold px-4 py-2.5 text-sm shadow-pop-sm hover:translate-y-[-2px] active:translate-y-[2px] transition-all flex items-center gap-1.5"
+        >
+          <Plus size={16} /> Add Floor
+        </button>
       </div>
 
       <div className="flex gap-6">
         {/* Floors Sidebar */}
-        <div className="w-48 shrink-0">
-          <div className="text-xs text-gray-500 uppercase font-semibold mb-3 px-1">Floors</div>
-          <div className="space-y-1">
+        <div className="w-52 shrink-0">
+          <div className="text-xs text-slate-500 uppercase font-bold mb-3 px-1">Floors</div>
+          <div className="space-y-2">
             {floors.map(f => (
-              <div key={f.id}
-                className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition ${selectedFloor === f.id ? 'bg-orange-500 text-white' : 'bg-gray-900 text-gray-300 hover:bg-gray-800'}`}
-                onClick={() => setSelectedFloor(f.id)}>
-                <span className="text-sm font-medium">{f.name}</span>
-                <button onClick={e => { e.stopPropagation(); deleteFloor(f.id); }}
-                  className="text-xs opacity-60 hover:opacity-100 hover:text-red-400">✕</button>
+              <div
+                key={f.id}
+                onClick={() => setSelectedFloor(f.id)}
+                className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl cursor-pointer border-2 transition-all duration-200 ${
+                  selectedFloor === f.id
+                    ? 'bg-[#8B5CF6] text-white border-slate-800 shadow-pop-sm translate-y-[-1px]'
+                    : 'bg-white text-slate-700 border-slate-100 hover:border-slate-200'
+                }`}
+              >
+                <span className="text-sm font-bold font-outfit">{f.name}</span>
+                <button
+                  onClick={e => { e.stopPropagation(); deleteFloor(f.id); }}
+                  className={`p-1 rounded-md transition ${selectedFloor === f.id ? 'hover:bg-slate-700 text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-red-500'}`}
+                >
+                  <X size={12} />
+                </button>
               </div>
             ))}
-            {floors.length === 0 && <div className="text-gray-600 text-xs px-1">No floors yet</div>}
+            {floors.length === 0 && <div className="text-slate-400 text-xs px-1 font-semibold">No floors yet</div>}
           </div>
         </div>
 
@@ -176,40 +116,45 @@ export default function Tables() {
           {selectedFloor ? (
             <>
               <div className="flex items-center justify-between mb-4">
-                <div className="text-gray-400 text-sm">{filteredTables.length} tables on this floor</div>
-                <button onClick={() => { setTableForm({ tableNumber: '', seats: 4, floorId: selectedFloor }); setModal('addTable'); }}
-                  className="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white px-3 py-2 rounded-lg text-sm transition">
-                  + Add Table
+                <div className="text-slate-500 text-sm font-semibold">{filteredTables.length} tables on this floor</div>
+                <button
+                  onClick={() => { setTableForm({ tableNumber: '', seats: 4, floorId: selectedFloor }); setModal('addTable'); }}
+                  className="bg-white hover:bg-slate-50 text-slate-800 border-2 border-slate-800 px-3.5 py-2 rounded-xl text-sm font-bold shadow-pop-sm hover:translate-y-[-1px] active:translate-y-[1px] transition-all flex items-center gap-1.5"
+                >
+                  <Plus size={14} /> Add Table
                 </button>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                 {filteredTables.map(t => (
-                  <div key={t.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 relative group hover:border-gray-600 transition">
-                    <button onClick={() => deleteTable(t.id)}
-                      className="absolute top-2 right-2 text-gray-600 hover:text-red-400 text-xs opacity-0 group-hover:opacity-100 transition">✕</button>
-                    <div className="text-2xl font-bold text-white mb-1">{t.tableNumber}</div>
-                    <div className="text-xs text-gray-500">👤 {t.seats} seats</div>
-                    <div className={`text-xs mt-2 ${t.currentOrderId ? 'text-yellow-400' : 'text-green-400'}`}>
-                      {t.currentOrderId ? '● Occupied' : '● Available'}
-                    </div>
-                    {/* QR Button */}
+                  <div key={t.id} className="bg-white border-2 border-slate-800 rounded-2xl p-4 relative group hover:shadow-pop shadow-pop-sm transition-all hover:translate-y-[-2px]">
                     <button
-                      onClick={() => setQrTable(t)}
-                      className="mt-3 w-full text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 hover:text-white py-1.5 rounded-lg transition flex items-center justify-center gap-1"
+                      onClick={() => deleteTable(t.id)}
+                      className="absolute top-3 right-3 text-slate-400 hover:text-red-500 p-1 hover:bg-slate-50 rounded-lg transition"
                     >
-                      <span>📱</span> View QR
+                      <Trash2 size={14} />
                     </button>
+                    <div className="text-2xl font-black text-slate-800 mb-1 font-outfit">{t.tableNumber}</div>
+                    <div className="text-xs text-slate-500 font-semibold flex items-center gap-1">
+                      <User size={12} className="text-slate-400" />
+                      <span>{t.seats} seats</span>
+                    </div>
+                    <div className="text-xs mt-3.5 font-bold flex items-center gap-1">
+                      <span className={`w-2 h-2 rounded-full ${t.currentOrderId ? 'bg-[#FBBF24] animate-pulse' : 'bg-[#34D399]'}`} />
+                      <span className={t.currentOrderId ? 'text-[#e5aa1c]' : 'text-[#2ba376]'}>
+                        {t.currentOrderId ? 'Occupied' : 'Available'}
+                      </span>
+                    </div>
                   </div>
                 ))}
                 {filteredTables.length === 0 && (
-                  <div className="col-span-full bg-gray-900 border border-dashed border-gray-700 rounded-xl p-8 text-center text-gray-500">
+                  <div className="col-span-full bg-white border-2 border-dashed border-slate-300 rounded-2xl p-10 text-center text-slate-400 font-semibold">
                     No tables on this floor. Add one!
                   </div>
                 )}
               </div>
             </>
           ) : (
-            <div className="flex items-center justify-center h-48 text-gray-500">Select a floor to view tables</div>
+            <div className="flex items-center justify-center h-48 text-slate-400 font-semibold">Select a floor to view tables</div>
           )}
         </div>
       </div>
@@ -218,14 +163,14 @@ export default function Tables() {
         <Modal title="Add Floor" onClose={() => setModal(null)}>
           <form onSubmit={addFloor} className="space-y-4">
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Floor Name *</label>
+              <label className="block text-sm font-bold text-slate-700 mb-1">Floor Name *</label>
               <input required value={floorName} onChange={e => setFloorName(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 focus:outline-none focus:border-orange-500"
+                className="w-full bg-white border-2 border-slate-200 text-slate-800 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#8B5CF6] transition font-semibold"
                 placeholder="e.g. Ground Floor" />
             </div>
             <div className="flex gap-3">
-              <button type="button" onClick={() => setModal(null)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg">Cancel</button>
-              <button type="submit" className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-2 rounded-lg font-medium">Add Floor</button>
+              <button type="button" onClick={() => setModal(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 border-2 border-slate-200 text-slate-700 py-2.5 rounded-xl transition font-bold text-sm">Cancel</button>
+              <button type="submit" className="flex-1 bg-[#8B5CF6] hover:bg-[#7c4ee4] text-white border-2 border-slate-800 py-2.5 rounded-xl transition font-bold text-sm shadow-pop-sm hover:translate-y-[-1px] active:translate-y-[1px]">Add Floor</button>
             </div>
           </form>
         </Modal>
@@ -235,25 +180,25 @@ export default function Tables() {
         <Modal title="Add Table" onClose={() => setModal(null)}>
           <form onSubmit={addTable} className="space-y-4">
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Table Number *</label>
+              <label className="block text-sm font-bold text-slate-700 mb-1">Table Number *</label>
               <input required value={tableForm.tableNumber} onChange={e => setTableForm({ ...tableForm, tableNumber: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 focus:outline-none focus:border-orange-500"
+                className="w-full bg-white border-2 border-slate-200 text-slate-800 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#8B5CF6] transition font-semibold"
                 placeholder="e.g. T7" />
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Seats</label>
+              <label className="block text-sm font-bold text-slate-700 mb-1">Seats</label>
               <input type="number" min="1" value={tableForm.seats} onChange={e => setTableForm({ ...tableForm, seats: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 focus:outline-none focus:border-orange-500" />
+                className="w-full bg-white border-2 border-slate-200 text-slate-800 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#8B5CF6] transition font-semibold" />
             </div>
             <div className="flex gap-3">
-              <button type="button" onClick={() => setModal(null)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg">Cancel</button>
-              <button type="submit" className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-2 rounded-lg font-medium">Add Table</button>
+              <button type="button" onClick={() => setModal(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 border-2 border-slate-200 text-slate-700 py-2.5 rounded-xl transition font-bold text-sm">Cancel</button>
+              <button type="submit" className="flex-1 bg-[#8B5CF6] hover:bg-[#7c4ee4] text-white border-2 border-slate-800 py-2.5 rounded-xl transition font-bold text-sm shadow-pop-sm hover:translate-y-[-1px] active:translate-y-[1px]">Add Table</button>
             </div>
           </form>
         </Modal>
       )}
 
-      {qrTable && <QRModal table={qrTable} onClose={() => setQrTable(null)} />}
+
     </div>
   );
 }
