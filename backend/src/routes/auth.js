@@ -3,7 +3,13 @@ const ctrl = require('../controllers/authController');
 const rateLimit = require('express-rate-limit');
 const { validate, rules: v } = require('../middleware/validate');
 
-const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { error: 'Too many attempts. Try again later.' } });
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 50,                          // 50 attempts per 15 min (demo-friendly)
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts. Please wait a few minutes and try again.' }
+});
 
 const signupValidation = validate({
   name:     [v.required, v.minLength(2)],
