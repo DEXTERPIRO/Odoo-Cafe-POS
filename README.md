@@ -2,6 +2,9 @@
 
 A production-ready, real-time Point of Sale (POS) system designed for cafes and restaurants. Built with Node.js, Express, Prisma ORM, PostgreSQL, React, Vite, and Socket.IO for live, bidirectional communication across terminals and displays.
 
+**Live Demo:** [odoo-cafe-pos-zeta.vercel.app](https://odoo-cafe-pos-zeta.vercel.app/)  
+**Backend API:** [odoo-cafe-pos-81do.onrender.com](https://odoo-cafe-pos-81do.onrender.com)
+
 ---
 
 ## Table of Contents
@@ -254,19 +257,33 @@ The reports module provides:
 
 ---
 
+## Live Demo URLs
+
+| Page | URL |
+|---|---|
+| Login / Entry | [odoo-cafe-pos-zeta.vercel.app/login](https://odoo-cafe-pos-zeta.vercel.app/login) |
+| POS Terminal | [odoo-cafe-pos-zeta.vercel.app/pos](https://odoo-cafe-pos-zeta.vercel.app/pos) |
+| Kitchen Display (KDS) | [odoo-cafe-pos-zeta.vercel.app/kitchen](https://odoo-cafe-pos-zeta.vercel.app/kitchen) |
+| Admin Backend Panel | [odoo-cafe-pos-zeta.vercel.app/backend](https://odoo-cafe-pos-zeta.vercel.app/backend) |
+| Backend REST API | [odoo-cafe-pos-81do.onrender.com](https://odoo-cafe-pos-81do.onrender.com) |
+
+> Note: The Render backend is on the free tier. The first request after a period of inactivity may take 30-50 seconds while the instance wakes up. Subsequent requests respond normally.
+
+---
+
 ## Quick Demo Walkthrough
 
 The following sequence demonstrates the complete order lifecycle from table selection to kitchen completion in under 2 minutes.
 
-1. **Login as Employee**: Log in at `/login` with `rahul@cafe.com` / `Rahul@123`. The floor map popup appears automatically.
+1. **Login as Employee**: Go to [odoo-cafe-pos-zeta.vercel.app/login](https://odoo-cafe-pos-zeta.vercel.app/login) and log in with `rahul@cafe.com` / `Rahul@123`. The floor map popup appears automatically.
 2. **Select a Table**: Click on an available table (e.g., T3) to start an order session.
 3. **Build the Order**: Click product cards to add items — Cappuccino, Paneer Pasta, and a dessert. Observe the automatic 5% order promotion applied when the total crosses the threshold.
 4. **Apply a Coupon**: Click the coupon field and enter `WELCOME20`. Click Apply. The 20% discount stacks on top of the auto-promotion.
 5. **Send to Kitchen**: Click the Kitchen button. The order is transmitted instantly.
-6. **Open the KDS**: In a second browser tab, open `/kitchen`. The new ticket appears immediately in the "To Cook" column.
+6. **Open the KDS**: In a second browser tab, open [odoo-cafe-pos-zeta.vercel.app/kitchen](https://odoo-cafe-pos-zeta.vercel.app/kitchen). The new ticket appears immediately in the "To Cook" column.
 7. **Advance the Ticket**: Click the state button on the ticket to move it to "Preparing".
 8. **Process Payment**: Back in the POS terminal, click Charge, select UPI, and scan the generated QR code to complete the transaction.
-9. **Check the Dashboard**: Log in as `admin@cafe.com` and open `/backend`. Revenue and session counts reflect the completed order.
+9. **Check the Dashboard**: Log in as `admin@cafe.com` at [odoo-cafe-pos-zeta.vercel.app/backend](https://odoo-cafe-pos-zeta.vercel.app/backend). Revenue and session counts reflect the completed order.
 
 ---
 
