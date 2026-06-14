@@ -90,8 +90,8 @@ export default function OrdersList({ session }) {
           orderNumber: order.orderNumber,
           tableId: order.tableId,
           table: order.table,
-          customerId: order.customerId,
-          customer: order.customer,
+          customerIds: order.customers?.map(c => c.id) || (order.customerId ? [order.customerId] : []),
+          customers: order.customers || (order.customer ? [order.customer] : []),
           couponCode: order.couponCode,
           cartItems,
         }
@@ -212,8 +212,10 @@ export default function OrdersList({ session }) {
                     {/* Items + customer */}
                     <div className="flex-1 text-xs font-semibold" style={{ color: MUTED }}>
                       {order.lines?.length || 0} item{order.lines?.length !== 1 ? 's' : ''}
-                      {order.customer && (
-                        <span className="ml-2 hidden sm:inline" style={{ color: ACCENT }}>· {order.customer.name}</span>
+                      {((order.customers && order.customers.length > 0) || order.customer) && (
+                        <span className="ml-2 hidden sm:inline" style={{ color: ACCENT }}>
+                          · {order.customers?.map(c => c.name).join(', ') || order.customer?.name}
+                        </span>
                       )}
                     </div>
 

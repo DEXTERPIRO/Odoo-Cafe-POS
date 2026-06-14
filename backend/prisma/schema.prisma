@@ -168,7 +168,6 @@ model Order {
   orderNumber      String      @unique
   sessionId        String
   tableId          String?
-  customerId       String?
   status           OrderStatus @default(DRAFT)
   subtotal         Decimal     @default(0) @db.Decimal(10,2)
   taxAmount        Decimal     @default(0) @db.Decimal(10,2)
@@ -182,7 +181,7 @@ model Order {
   updatedAt        DateTime    @updatedAt
   session          PosSession  @relation(fields: [sessionId], references: [id])
   table            Table?      @relation(fields: [tableId], references: [id])
-  customer         Customer?   @relation(fields: [customerId], references: [id])
+  customers        Customer[]
   createdBy        User        @relation(fields: [createdById], references: [id])
   lines            OrderLine[]
   kdsTicket        KdsTicket?

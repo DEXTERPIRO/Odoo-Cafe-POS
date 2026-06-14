@@ -17,7 +17,7 @@ router.get('/', verifyToken, async (req, res) => {
               },
               include: {
                 lines: { include: { product: true } },
-                customer: true
+                customers: true
               }
             }
           }

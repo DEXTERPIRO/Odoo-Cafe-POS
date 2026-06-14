@@ -41,7 +41,7 @@ function Modal({ title, onClose, children, maxW = 'max-w-md' }) {
 ───────────────────────────────────────────────────────── */
 function ReceiptModal({ order, onClose, onNewOrder }) {
   const completedOrder = order;
-  const [emailInput, setEmailInput] = useState(order?.customer?.email || '');
+  const [emailInput, setEmailInput] = useState(order?.customers?.[0]?.email || order?.customer?.email || '');
   const [sendingEmail, setSendingEmail] = useState(false);
 
   const handlePrint = () => {
@@ -50,7 +50,8 @@ function ReceiptModal({ order, onClose, onNewOrder }) {
       .map(l => `<tr><td>${l.product?.name} &times; ${l.quantity}</td><td class="amt">${Number(l.lineTotal).toFixed(2)}</td></tr>`)
       .join('');
     const discount = parseFloat(o.discountAmount || 0);
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${o.orderNumber}</title>
+  const customerNames = o.customers?.map(c => c.name).join(', ') || o.customer?.name || '';
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${o.orderNumber}</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   body{font-family:'Courier New',monospace;font-size:13px;color:#000;background:#fff;width:300px;padding:16px}
@@ -69,6 +70,7 @@ function ReceiptModal({ order, onClose, onNewOrder }) {
   <div class="center">Thank you for your visit!</div>
   <div class="row"><span>Order #</span><span>${o.orderNumber}</span></div>
   <div class="row"><span>Table</span><span>${o.table?.tableNumber || 'Takeaway'}</span></div>
+  ${customerNames ? `<div class="row"><span>Customer(s)</span><span>${customerNames}</span></div>` : ''}
   <div class="row"><span>Date</span><span>${new Date(o.createdAt).toLocaleString('en-IN')}</span></div>
   <div class="divider"></div>
   <table>${lines}</table>
@@ -132,6 +134,14 @@ function ReceiptModal({ order, onClose, onNewOrder }) {
         <div className="flex justify-between text-slate-500">
           <span>Table</span><span className="text-slate-800 font-bold">{order.table?.tableNumber?.toUpperCase() || 'Takeaway'}</span>
         </div>
+        {((order.customers && order.customers.length > 0) || order.customer) && (
+          <div className="flex justify-between text-slate-500">
+            <span>Customer(s)</span>
+            <span className="text-slate-800 font-bold truncate max-w-[180px]">
+              {order.customers?.map(c => c.name).join(', ') || order.customer?.name}
+            </span>
+          </div>
+        )}
         <div className="flex justify-between text-slate-500">
           <span>Date</span><span className="text-slate-800 font-bold">{new Date(order.createdAt).toLocaleString('en-IN')}</span>
         </div>
@@ -296,31 +306,6 @@ function CustomerModal({ onAssign, onClose }) {
             ))}
             {search && customers.length === 0 && <div className="text-slate-500 text-sm text-center py-4">No customers found</div>}
           </div>
-          {search.trim().length > 0 && customers.length <= 1 && (
-            <button
-              type="button"
-              onClick={async () => {
-                try {
-                  const val = search.trim();
-                  const isPhone = /^[0-9+() -]{7,15}$/.test(val);
-                  const payload = {
-                    name: isPhone ? `Customer ${val}` : val,
-                    phone: isPhone ? val : '',
-                    email: '',
-                  };
-                  const newCust = await api.post('/customers', payload);
-                  onAssign(newCust);
-                  toast.success(`Customer "${newCust.name}" added!`);
-                } catch (err) {
-                  toast.error(err?.error || 'Failed to quickly create customer');
-                }
-              }}
-              className="w-full text-center py-2.5 px-3 bg-violet-50 hover:bg-violet-100 text-violet-750 font-bold border-2 border-dashed border-violet-300 rounded-xl transition-all text-xs flex items-center justify-center gap-1.5 mt-2"
-              style={{ boxShadow: 'var(--pop-shadow-sm)' }}
-            >
-              <Plus size={14} /> Quick Add "{search.trim()}" as Customer
-            </button>
-          )}
         </div>
       )}
 
@@ -363,9 +348,20 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
   const [activeCat, setActiveCat] = useState('all');
   const [localSearch, setLocalSearch] = useState('');
   const [coupon, setCoupon] = useState(null);
-  const [customer, setCustomer] = useState(null);
+  const [customers, setCustomers] = useState([]);
   const [currentOrder, setCurrentOrder] = useState(existingOrder);
   const [mobileTab, setMobileTab] = useState('products');
+
+  const assignCustomer = (c) => {
+    setCustomers(prev => {
+      if (prev.some(x => x.id === c.id)) return prev;
+      return [...prev, c];
+    });
+  };
+
+  const removeCustomer = (id) => {
+    setCustomers(prev => prev.filter(c => c.id !== id));
+  };
 
   /* ── UI state ── */
   const [showPayment, setShowPayment] = useState(false);
@@ -406,7 +402,7 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
       setCurrentOrder(null);
       setCartItems([]);
       setCoupon(null);
-      setCustomer(null);
+      setCustomers([]);
       setPayMethod(null);
       setCashReceived('');
       setHideCustomerSuggest(false);
@@ -422,10 +418,12 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
 
     if (orderToLoad.cartItems) {
       setCartItems(orderToLoad.cartItems);
-      if (orderToLoad.customer) {
-        setCustomer(orderToLoad.customer);
+      if (Array.isArray(orderToLoad.customers)) {
+        setCustomers(orderToLoad.customers);
+      } else if (orderToLoad.customer) {
+        setCustomers([orderToLoad.customer]);
       } else {
-        setCustomer(null);
+        setCustomers([]);
       }
       if (orderToLoad.couponCode) {
         api.post('/coupons/validate', { code: orderToLoad.couponCode })
@@ -440,10 +438,12 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
         quantity: l.quantity,
         color: l.product?.category?.color,
       })));
-      if (orderToLoad.customer) {
-        setCustomer(orderToLoad.customer);
+      if (Array.isArray(orderToLoad.customers)) {
+        setCustomers(orderToLoad.customers);
+      } else if (orderToLoad.customer) {
+        setCustomers([orderToLoad.customer]);
       } else {
-        setCustomer(null);
+        setCustomers([]);
       }
       if (orderToLoad.couponCode) {
         api.post('/coupons/validate', { code: orderToLoad.couponCode })
@@ -603,7 +603,7 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
           const order = await api.put(`/orders/${currentOrder.id}`, {
             lines,
             tableId: table?.id || null,
-            customerId: customer?.id || null,
+            customerIds: customers.map(c => c.id),
             couponCode: coupon?.code || null,
           });
           setCurrentOrder(order);
@@ -613,21 +613,21 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
         const order = await api.post('/orders', {
           lines, sessionId: session.id,
           tableId: table?.id || null,
-          customerId: customer?.id || null,
+          customerIds: customers.map(c => c.id),
           couponCode: coupon?.code || null,
         });
         setCurrentOrder(order);
         onOrderUpdate?.(order);
       }
     } catch {}
-  }, [cartItems, session, table, customer, coupon, currentOrder, onOrderUpdate]);
+  }, [cartItems, session, table, customers, coupon, currentOrder, onOrderUpdate]);
 
   /* debounce draft save */
   useEffect(() => {
     clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(saveDraft, 1500);
     return () => clearTimeout(saveTimerRef.current);
-  }, [cartItems, coupon, customer, saveDraft]);
+  }, [cartItems, coupon, customers, saveDraft]);
 
   /* ────── send to kitchen ────── */
   const handleSendKitchen = async () => {
@@ -641,7 +641,7 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
           order = await api.put(`/orders/${order.id}`, {
             lines,
             tableId: table?.id || null,
-            customerId: customer?.id || null,
+            customerIds: customers.map(c => c.id),
             couponCode: coupon?.code || null,
           });
           setCurrentOrder(order);
@@ -651,7 +651,7 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
         order = await api.post('/orders', {
           lines: cartItems.map(i => ({ productId: i.productId, quantity: i.quantity })),
           sessionId: session.id, tableId: table?.id || null,
-          customerId: customer?.id || null, couponCode: coupon?.code || null,
+          customerIds: customers.map(c => c.id), couponCode: coupon?.code || null,
         });
         setCurrentOrder(order);
         onOrderUpdate?.(order);
@@ -679,7 +679,7 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
           order = await api.put(`/orders/${order.id}`, {
             lines,
             tableId: table?.id || null,
-            customerId: customer?.id || null,
+            customerIds: customers.map(c => c.id),
             couponCode: coupon?.code || null,
           });
           setCurrentOrder(order);
@@ -689,7 +689,7 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
         order = await api.post('/orders', {
           lines: cartItems.map(i => ({ productId: i.productId, quantity: i.quantity })),
           sessionId: session.id, tableId: table?.id || null,
-          customerId: customer?.id || null, couponCode: coupon?.code || null,
+          customerIds: customers.map(c => c.id), couponCode: coupon?.code || null,
         });
         setCurrentOrder(order);
         onOrderUpdate?.(order);
@@ -713,7 +713,7 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
   };
 
   const handleNewOrder = () => {
-    setCartItems([]); setCoupon(null); setCustomer(null);
+    setCartItems([]); setCoupon(null); setCustomers([]);
     setCurrentOrder(null); setPayMethod(null); setCashReceived('');
     setShowReceipt(false); setPaidOrder(null);
     onOrderComplete?.();
@@ -962,18 +962,18 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
                 ) : (
                   <span className="flex items-center gap-1"><ShoppingBag size={11} /> Takeaway</span>
                 )}
-                {customer && (
-                  <span className="flex items-center gap-1 bg-violet-50 text-violet-850 border border-violet-200 px-2 py-0.5 rounded-lg text-xs font-bold font-jakarta">
-                    <User size={10} /> {customer.name}
+                {customers.map(c => (
+                  <span key={c.id} className="flex items-center gap-1 bg-violet-50 text-violet-850 border border-violet-200 px-2 py-0.5 rounded-lg text-xs font-bold font-jakarta">
+                    <User size={10} /> {c.name}
                     <button 
-                      onClick={(e) => { e.stopPropagation(); setCustomer(null); }}
+                      onClick={(e) => { e.stopPropagation(); removeCustomer(c.id); }}
                       className="ml-1 text-violet-400 hover:text-rose-500 font-black text-xs shrink-0 cursor-pointer"
                       title="Remove Customer"
                     >
                       ×
                     </button>
                   </span>
-                )}
+                ))}
               </div>
             </div>
             <div className="px-2.5 py-1 rounded-full text-xs font-bold border-2" style={{ background: `${ACCENT}15`, borderColor: `${ACCENT}40`, color: ACCENT }}>
@@ -985,7 +985,7 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
         {/* ── Cart Items ── */}
         {!showPayment && (
           <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5" style={{ background: '#FAFAFA' }}>
-            {!customer && !hideCustomerSuggest && (
+            {customers.length === 0 && !hideCustomerSuggest && (
               <div 
                 className="border-2 border-dashed rounded-xl p-3 mb-2 flex items-center justify-between gap-2 text-xs font-semibold transition-all duration-200"
                 style={{ 
@@ -1135,10 +1135,15 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
           <div className="px-3 pb-3 grid grid-cols-2 gap-2 shrink-0">
             <button onClick={() => setShowCustomer(true)}
               className="h-11 flex items-center justify-center gap-1.5 rounded-xl text-sm font-bold transition-all duration-200 border-2"
-              style={customer
+              style={customers.length > 0
                 ? { background: `${ACCENT}15`, color: ACCENT, borderColor: ACCENT, boxShadow: `2px 2px 0px 0px ${FG}` }
                 : { background: WHITE, color: MUTED, borderColor: BORDER }}>
-              <User size={14} strokeWidth={2.5} /> {customer ? customer.name.split(' ')[0] : 'Customer'}
+              <User size={14} strokeWidth={2.5} />{' '}
+              {customers.length === 0
+                ? 'Customer'
+                : customers.length === 1
+                ? customers[0].name.split(' ')[0]
+                : `${customers[0].name.split(' ')[0]} (+${customers.length - 1})`}
             </button>
             <button onClick={() => setShowCoupon(true)}
               className="h-11 flex items-center justify-center gap-1.5 rounded-xl text-sm font-bold transition-all duration-200 border-2"
@@ -1264,7 +1269,7 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
       {showCustomer && (
         <CustomerModal
           onAssign={(c) => {
-            setCustomer(c);
+            assignCustomer(c);
             setShowCustomer(false);
           }}
           onClose={() => {

@@ -27,7 +27,7 @@ router.get('/tickets', verifyToken, async (req, res) => {
           }
         ]
       },
-      include: { order: { include: { lines: { include: { product: true } }, table: true, customer: true } } },
+      include: { order: { include: { lines: { include: { product: true } }, table: true, customers: true } } },
       orderBy: { createdAt: 'asc' }
     });
     res.json(tickets);
@@ -47,7 +47,7 @@ router.put('/tickets/:id/stage', verifyToken, async (req, res) => {
     const updated = await prisma.kdsTicket.update({
       where: { id: req.params.id },
       data: { stage: nextStage },
-      include: { order: { include: { lines: { include: { product: true } }, table: true, customer: true } } }
+      include: { order: { include: { lines: { include: { product: true } }, table: true, customers: true } } }
     });
 
     // Update order status:

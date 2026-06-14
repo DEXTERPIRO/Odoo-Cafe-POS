@@ -37,7 +37,7 @@ router.get('/', verifyToken, requireEmployee, async (req, res) => {
     if (sessionId) where.sessionId = sessionId;
     if (status) where.status = status;
     const orders = await prisma.order.findMany({
-      where, include: { lines: { include: { product: true } }, customer: true, table: true, kdsTicket: true, createdBy: { select: { name: true } } },
+      where, include: { lines: { include: { product: true } }, customers: true, table: true, kdsTicket: true, createdBy: { select: { name: true } } },
       orderBy: { createdAt: 'desc' }
     });
     res.json(orders);
@@ -46,7 +46,16 @@ router.get('/', verifyToken, requireEmployee, async (req, res) => {
 
 router.post('/', verifyToken, requireEmployee, async (req, res) => {
   try {
-    const { tableId, customerId, lines, couponCode, sessionId } = req.body;
+    const { tableId, customerId, customerIds, lines, couponCode, sessionId } = req.body;
+    let customerConnect = [];
+    if (Array.isArray(customerIds)) {
+      customerConnect = customerIds.map(id => ({ id }));
+    } else if (Array.isArray(customerId)) {
+      customerConnect = customerId.map(id => ({ id }));
+    } else if (customerId) {
+      customerConnect = [{ id: customerId }];
+    }
+
     const finalLines = lines || [];
     const ts = Date.now().toString().slice(-6);
     const rand = Math.floor(Math.random() * 100).toString().padStart(2, '0');
@@ -54,12 +63,13 @@ router.post('/', verifyToken, requireEmployee, async (req, res) => {
     const { processedLines, subtotal, taxAmount, discountAmount, total } = await calcOrder(finalLines, couponCode);
     const order = await prisma.order.create({
       data: {
-        orderNumber, sessionId, tableId, customerId, couponCode,
+        orderNumber, sessionId, tableId, couponCode,
         subtotal, taxAmount, discountAmount, total,
         createdById: req.user.id,
-        lines: { create: processedLines }
+        lines: { create: processedLines },
+        customers: { connect: customerConnect }
       },
-      include: { lines: { include: { product: true } }, customer: true, table: true }
+      include: { lines: { include: { product: true } }, customers: true, table: true }
     });
     if (tableId) await prisma.table.update({ where: { id: tableId }, data: { currentOrderId: order.id } });
     res.status(201).json(order);
@@ -70,7 +80,7 @@ router.get('/:id', verifyToken, requireEmployee, async (req, res) => {
   try {
     const order = await prisma.order.findUnique({
       where: { id: req.params.id },
-      include: { lines: { include: { product: { include: { category: true } } } }, customer: true, table: true, kdsTicket: true }
+      include: { lines: { include: { product: { include: { category: true } } } }, customers: true, table: true, kdsTicket: true }
     });
     if (!order) return res.status(404).json({ error: 'Order not found' });
     res.json(order);
@@ -100,7 +110,7 @@ router.put('/:id/send-kitchen', verifyToken, requireEmployee, async (req, res) =
               }
             },
             table: true,
-            customer: true
+            customers: true
           }
         }
       }
@@ -119,11 +129,11 @@ router.put('/:id/send-kitchen', verifyToken, requireEmployee, async (req, res) =
 router.put('/:id/pay', verifyToken, requireEmployee, async (req, res) => {
   try {
     const { paymentMethod, paymentReference } = req.body;
-    if (!paymentMethod) return res.status(400).json({ error: 'Payment method required' });
+    if (!paymentMethod) return res.status(404).json({ error: 'Payment method required' });
     const order = await prisma.order.update({
       where: { id: req.params.id },
       data: { status: 'PAID', paymentMethod, paymentReference },
-      include: { lines: { include: { product: true } }, customer: true, table: true }
+      include: { lines: { include: { product: true } }, customers: true, table: true }
     });
     if (order.tableId) await prisma.table.update({ where: { id: order.tableId }, data: { currentOrderId: null } });
     await prisma.posSession.update({ where: { id: order.sessionId }, data: { lastSaleAmount: order.total, totalOrders: { increment: 1 }, totalRevenue: { increment: order.total } } });
@@ -160,7 +170,15 @@ router.put('/:id/cancel', verifyToken, requireEmployee, async (req, res) => {
 router.put('/:id', verifyToken, requireEmployee, async (req, res) => {
   try {
     const { id } = req.params;
-    const { tableId, customerId, lines, couponCode } = req.body;
+    const { tableId, customerId, customerIds, lines, couponCode } = req.body;
+    let customerConnect = [];
+    if (Array.isArray(customerIds)) {
+      customerConnect = customerIds.map(id => ({ id }));
+    } else if (Array.isArray(customerId)) {
+      customerConnect = customerId.map(id => ({ id }));
+    } else if (customerId) {
+      customerConnect = [{ id: customerId }];
+    }
 
     const existingOrder = await prisma.order.findUnique({
       where: { id },
@@ -185,15 +203,15 @@ router.put('/:id', verifyToken, requireEmployee, async (req, res) => {
         where: { id },
         data: {
           tableId: tableId || null,
-          customerId: customerId || null,
           couponCode: couponCode || null,
           subtotal,
           taxAmount,
           discountAmount,
           total,
-          lines: { create: processedLines }
+          lines: { create: processedLines },
+          customers: { set: customerConnect }
         },
-        include: { lines: { include: { product: true } }, customer: true, table: true }
+        include: { lines: { include: { product: true } }, customers: true, table: true }
       });
 
       // Update table currentOrderId
@@ -226,7 +244,7 @@ router.put('/:id', verifyToken, requireEmployee, async (req, res) => {
                 }
               },
               table: true,
-              customer: true
+              customers: true
             }
           }
         }
@@ -251,7 +269,7 @@ router.post('/:id/send-receipt', verifyToken, requireEmployee, async (req, res) 
       include: {
         lines: { include: { product: true } },
         table: true,
-        customer: true,
+        customers: true,
       },
     });
     if (!order) return res.status(404).json({ error: 'Order not found' });
