@@ -19,6 +19,15 @@ const minsAgo = (n) => new Date(Date.now() - n * 60 * 1000);
 async function main() {
   console.log('🌱 Seeding Cafe POS demo data…');
 
+  const defaultOrgId = '00000000-0000-0000-0000-000000000000';
+
+  // Create default organization
+  const defaultOrg = await prisma.organization.upsert({
+    where: { id: defaultOrgId },
+    update: { name: 'Default Cafe' },
+    create: { id: defaultOrgId, name: 'Default Cafe' },
+  });
+
   /* ── 1. USERS ──────────────────────────────────────── */
   const adminPw = await bcrypt.hash('Admin@123', 12);
   const empPw1  = await bcrypt.hash('Rahul@123', 12);
@@ -26,28 +35,48 @@ async function main() {
 
   const admin = await prisma.user.upsert({
     where: { email: 'admin@cafe.com' },
-    update: {},
-    create: { name: 'Admin User', email: 'admin@cafe.com', password: adminPw, role: 'ADMIN' },
+    update: { organizationId: defaultOrgId },
+    create: { name: 'Admin User', email: 'admin@cafe.com', password: adminPw, role: 'ADMIN', organizationId: defaultOrgId },
   });
   const rahul = await prisma.user.upsert({
     where: { email: 'rahul@cafe.com' },
-    update: {},
-    create: { name: 'Rahul Sharma', email: 'rahul@cafe.com', password: empPw1, role: 'EMPLOYEE' },
+    update: { organizationId: defaultOrgId },
+    create: { name: 'Rahul Sharma', email: 'rahul@cafe.com', password: empPw1, role: 'EMPLOYEE', organizationId: defaultOrgId },
   });
   const priya = await prisma.user.upsert({
     where: { email: 'priya@cafe.com' },
-    update: {},
-    create: { name: 'Priya Patel', email: 'priya@cafe.com', password: empPw2, role: 'EMPLOYEE' },
+    update: { organizationId: defaultOrgId },
+    create: { name: 'Priya Patel', email: 'priya@cafe.com', password: empPw2, role: 'EMPLOYEE', organizationId: defaultOrgId },
   });
   console.log('  ✅ Users created');
 
   /* ── 2. CATEGORIES ─────────────────────────────────── */
   const [hotDrinks, coldDrinks, snacks, mains, desserts] = await Promise.all([
-    prisma.productCategory.upsert({ where: { name: 'Hot Drinks' }, update: {}, create: { name: 'Hot Drinks', color: '#E53E3E' } }),
-    prisma.productCategory.upsert({ where: { name: 'Cold Drinks' }, update: {}, create: { name: 'Cold Drinks', color: '#3182CE' } }),
-    prisma.productCategory.upsert({ where: { name: 'Snacks' }, update: {}, create: { name: 'Snacks', color: '#DD6B20' } }),
-    prisma.productCategory.upsert({ where: { name: 'Mains' }, update: {}, create: { name: 'Mains', color: '#38A169' } }),
-    prisma.productCategory.upsert({ where: { name: 'Desserts' }, update: {}, create: { name: 'Desserts', color: '#805AD5' } }),
+    prisma.productCategory.upsert({
+      where: { organizationId_name: { organizationId: defaultOrgId, name: 'Hot Drinks' } },
+      update: {},
+      create: { name: 'Hot Drinks', color: '#E53E3E', organizationId: defaultOrgId }
+    }),
+    prisma.productCategory.upsert({
+      where: { organizationId_name: { organizationId: defaultOrgId, name: 'Cold Drinks' } },
+      update: {},
+      create: { name: 'Cold Drinks', color: '#3182CE', organizationId: defaultOrgId }
+    }),
+    prisma.productCategory.upsert({
+      where: { organizationId_name: { organizationId: defaultOrgId, name: 'Snacks' } },
+      update: {},
+      create: { name: 'Snacks', color: '#DD6B20', organizationId: defaultOrgId }
+    }),
+    prisma.productCategory.upsert({
+      where: { organizationId_name: { organizationId: defaultOrgId, name: 'Mains' } },
+      update: {},
+      create: { name: 'Mains', color: '#38A169', organizationId: defaultOrgId }
+    }),
+    prisma.productCategory.upsert({
+      where: { organizationId_name: { organizationId: defaultOrgId, name: 'Desserts' } },
+      update: {},
+      create: { name: 'Desserts', color: '#805AD5', organizationId: defaultOrgId }
+    }),
   ]);
   console.log('  ✅ Categories created');
 
@@ -74,9 +103,9 @@ async function main() {
 
   const products = {};
   for (const def of productDefs) {
-    let p = await prisma.product.findFirst({ where: { name: def.name } });
+    let p = await prisma.product.findFirst({ where: { name: def.name, organizationId: defaultOrgId } });
     if (!p) {
-      p = await prisma.product.create({ data: def });
+      p = await prisma.product.create({ data: { ...def, organizationId: defaultOrgId } });
     } else {
       p = await prisma.product.update({
         where: { id: p.id },
@@ -94,17 +123,19 @@ async function main() {
     { name: 'UPI',  isEnabled: true, upiId: 'cafe@upi' },
   ];
   for (const pm of pmDefs) {
-    const exists = await prisma.paymentMethod.findFirst({ where: { name: pm.name } });
-    if (!exists) await prisma.paymentMethod.create({ data: pm });
+    const exists = await prisma.paymentMethod.findFirst({ where: { name: pm.name, organizationId: defaultOrgId } });
+    if (!exists) {
+      await prisma.paymentMethod.create({ data: { ...pm, organizationId: defaultOrgId } });
+    }
   }
   console.log('  ✅ Payment methods created');
 
   /* ── 5. FLOORS & TABLES ────────────────────────────── */
-  let groundFloor = await prisma.floor.findFirst({ where: { name: 'Ground Floor' } });
-  if (!groundFloor) groundFloor = await prisma.floor.create({ data: { name: 'Ground Floor' } });
+  let groundFloor = await prisma.floor.findFirst({ where: { name: 'Ground Floor', organizationId: defaultOrgId } });
+  if (!groundFloor) groundFloor = await prisma.floor.create({ data: { name: 'Ground Floor', organizationId: defaultOrgId } });
 
-  let rooftop = await prisma.floor.findFirst({ where: { name: 'Rooftop' } });
-  if (!rooftop) rooftop = await prisma.floor.create({ data: { name: 'Rooftop' } });
+  let rooftop = await prisma.floor.findFirst({ where: { name: 'Rooftop', organizationId: defaultOrgId } });
+  if (!rooftop) rooftop = await prisma.floor.create({ data: { name: 'Rooftop', organizationId: defaultOrgId } });
 
   const tablesDef = [
     { tableNumber: 'T1', seats: 2, floorId: groundFloor.id },
@@ -119,32 +150,32 @@ async function main() {
 
   const tables = {};
   for (const def of tablesDef) {
-    let t = await prisma.table.findFirst({ where: { tableNumber: def.tableNumber } });
-    if (!t) t = await prisma.table.create({ data: { ...def, isActive: true } });
+    let t = await prisma.table.findFirst({ where: { tableNumber: def.tableNumber, organizationId: defaultOrgId } });
+    if (!t) t = await prisma.table.create({ data: { ...def, isActive: true, organizationId: defaultOrgId } });
     tables[t.tableNumber] = t;
   }
   console.log('  ✅ Floors & tables created');
 
   /* ── 6. COUPONS ────────────────────────────────────── */
   await prisma.coupon.upsert({
-    where: { code: 'WELCOME20' },
+    where: { organizationId_code: { organizationId: defaultOrgId, code: 'WELCOME20' } },
     update: {},
-    create: { code: 'WELCOME20', discountType: 'PERCENTAGE', discountValue: 20, isActive: true },
+    create: { code: 'WELCOME20', discountType: 'PERCENTAGE', discountValue: 20, isActive: true, organizationId: defaultOrgId },
   });
   await prisma.coupon.upsert({
-    where: { code: 'SAVE50' },
+    where: { organizationId_code: { organizationId: defaultOrgId, code: 'SAVE50' } },
     update: {},
-    create: { code: 'SAVE50', discountType: 'FIXED', discountValue: 50, isActive: true },
+    create: { code: 'SAVE50', discountType: 'FIXED', discountValue: 50, isActive: true, organizationId: defaultOrgId },
   });
   await prisma.coupon.upsert({
-    where: { code: 'FLAT10' },
+    where: { organizationId_code: { organizationId: defaultOrgId, code: 'FLAT10' } },
     update: {},
-    create: { code: 'FLAT10', discountType: 'PERCENTAGE', discountValue: 10, isActive: true },
+    create: { code: 'FLAT10', discountType: 'PERCENTAGE', discountValue: 10, isActive: true, organizationId: defaultOrgId },
   });
   console.log('  ✅ Coupons created (WELCOME20, SAVE50, FLAT10)');
 
   /* ── 7. PROMOTION ──────────────────────────────────── */
-  const existingPromo = await prisma.promotion.findFirst({ where: { name: 'Happy Hour Deal' } });
+  const existingPromo = await prisma.promotion.findFirst({ where: { name: 'Happy Hour Deal', organizationId: defaultOrgId } });
   if (!existingPromo) {
     await prisma.promotion.create({
       data: {
@@ -154,6 +185,7 @@ async function main() {
         applyTo: 'ORDER',
         minOrderAmount: 300,
         isActive: true,
+        organizationId: defaultOrgId,
       },
     });
   }
@@ -162,7 +194,7 @@ async function main() {
   /* ── 8. OPEN POS SESSION ───────────────────────────── */
   // Close any stale open sessions first
   await prisma.posSession.updateMany({
-    where: { status: 'OPEN' },
+    where: { status: 'OPEN', organizationId: defaultOrgId },
     data: { status: 'CLOSED', closedAt: new Date() },
   });
 
@@ -171,13 +203,14 @@ async function main() {
       openedById: rahul.id,
       status: 'OPEN',
       openedAt: today9am(),
+      organizationId: defaultOrgId,
     },
   });
   console.log('  ✅ POS session opened (9:00 AM today, by Rahul)');
 
   /* ── pre-clean: delete any existing seeded orders ──── */
   const seedOrderNums = ['ORD-001','ORD-002','ORD-003','ORD-004','ORD-005','ORD-006','ORD-007','ORD-008'];
-  await prisma.order.deleteMany({ where: { orderNumber: { in: seedOrderNums } } });
+  await prisma.order.deleteMany({ where: { orderNumber: { in: seedOrderNums }, organizationId: defaultOrgId } });
 
   /* ── helper: build order total ────────────────────── */
   const buildOrder = (lines) => {
@@ -206,6 +239,7 @@ async function main() {
         subtotal, taxAmount, discountAmount: 0, total,
         paymentMethod: 'CASH',
         createdAt: minsAgo(95),
+        organizationId: defaultOrgId,
         lines: { create: lines.map(l => ({ ...l, lineTotal: l.unitPrice * l.quantity })) },
       },
     });
@@ -235,6 +269,7 @@ async function main() {
         paymentMethod: 'UPI',
         couponCode: 'WELCOME20',
         createdAt: minsAgo(75),
+        organizationId: defaultOrgId,
         lines: { create: lines.map(l => ({ ...l, lineTotal: l.unitPrice * l.quantity })) },
       },
     });
@@ -259,6 +294,7 @@ async function main() {
         paymentMethod: 'CARD',
         paymentReference: 'TXN-4829301',
         createdAt: minsAgo(55),
+        organizationId: defaultOrgId,
         lines: { create: lines.map(l => ({ ...l, lineTotal: l.unitPrice * l.quantity })) },
       },
     });
@@ -285,6 +321,7 @@ async function main() {
         paymentMethod: 'CASH',
         couponCode: 'SAVE50',
         createdAt: minsAgo(40),
+        organizationId: defaultOrgId,
         lines: { create: lines.map(l => ({ ...l, lineTotal: l.unitPrice * l.quantity })) },
       },
     });
@@ -308,6 +345,7 @@ async function main() {
         status: 'SENT_TO_KITCHEN',
         subtotal, taxAmount, discountAmount: 0, total,
         createdAt: minsAgo(12),
+        organizationId: defaultOrgId,
         lines: {
           create: lines.map(l => ({
             ...l,
@@ -347,6 +385,7 @@ async function main() {
         status: 'SENT_TO_KITCHEN',
         subtotal, taxAmount, discountAmount: 0, total,
         createdAt: minsAgo(18),
+        organizationId: defaultOrgId,
         lines: {
           create: lines.map(l => ({
             ...l,
@@ -386,6 +425,7 @@ async function main() {
         status: 'DRAFT',
         subtotal, taxAmount, discountAmount: 0, total,
         createdAt: minsAgo(5),
+        organizationId: defaultOrgId,
         lines: { create: lines.map(l => ({ ...l, lineTotal: l.unitPrice * l.quantity })) },
       },
     });
@@ -408,6 +448,7 @@ async function main() {
         status: 'CANCELLED',
         subtotal, taxAmount, discountAmount: 0, total,
         createdAt: minsAgo(30),
+        organizationId: defaultOrgId,
         lines: { create: lines.map(l => ({ ...l, lineTotal: l.unitPrice * l.quantity })) },
       },
     });
@@ -416,7 +457,7 @@ async function main() {
 
   /* ── 10. Session totals snapshot ───────────────────── */
   const paidOrders = await prisma.order.findMany({
-    where: { sessionId: session.id, status: 'PAID' },
+    where: { sessionId: session.id, status: 'PAID', organizationId: defaultOrgId },
   });
   const sessionRevenue = paidOrders.reduce((s, o) => s + parseFloat(o.total), 0);
   await prisma.posSession.update({

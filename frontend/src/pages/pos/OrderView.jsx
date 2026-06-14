@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { io } from 'socket.io-client';
+import { useAuthStore } from '../../store/authStore';
 import api from '../../api/client';
 import toast from 'react-hot-toast';
 import {
@@ -349,6 +350,7 @@ function CustomerModal({ onAssign, onClose }) {
    MAIN: ORDER VIEW
 ───────────────────────────────────────────────────────── */
 export default function OrderView({ table, session, existingOrder, initialOrder, searchQuery, onOrderComplete, onOrderUpdate, onTableClick }) {
+  const { user } = useAuthStore();
   /* ── data ── */
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -588,7 +590,7 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
       transports: ['websocket', 'polling'],
     });
 
-    socket.emit('join-kds');
+    socket.emit('join-kds', user?.organizationId);
 
     socket.on('ticket-updated', (updated) => {
       if (updated.orderId === currentOrder.id) {

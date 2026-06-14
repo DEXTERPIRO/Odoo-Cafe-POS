@@ -6,8 +6,22 @@ const prisma = new PrismaClient();
 router.get('/', verifyToken, requireEmployee, async (req, res) => {
   try {
     const { search } = req.query;
+    const where = { organizationId: req.user.organizationId };
+    
+    if (search) {
+      where.AND = [
+        {
+          OR: [
+            { name: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } },
+            { phone: { contains: search } }
+          ]
+        }
+      ];
+    }
+
     const customers = await prisma.customer.findMany({
-      where: search ? { OR: [{ name: { contains: search, mode: 'insensitive' } }, { email: { contains: search, mode: 'insensitive' } }, { phone: { contains: search } }] } : {},
+      where,
       orderBy: { name: 'asc' }
     });
     res.json(customers);
@@ -18,7 +32,14 @@ router.post('/', verifyToken, requireEmployee, async (req, res) => {
   try {
     const { name, email, phone } = req.body;
     if (!name) return res.status(400).json({ error: 'Name required' });
-    const customer = await prisma.customer.create({ data: { name, email, phone } });
+    const customer = await prisma.customer.create({
+      data: {
+        name,
+        email,
+        phone,
+        organizationId: req.user.organizationId
+      }
+    });
     res.status(201).json(customer);
   } catch (e) { res.status(500).json({ error: 'Something went wrong' }); }
 });
@@ -26,13 +47,26 @@ router.post('/', verifyToken, requireEmployee, async (req, res) => {
 router.put('/:id', verifyToken, requireEmployee, async (req, res) => {
   try {
     const { name, email, phone } = req.body;
-    const customer = await prisma.customer.update({ where: { id: req.params.id }, data: { name, email, phone } });
+    const existing = await prisma.customer.findFirst({
+      where: { id: req.params.id, organizationId: req.user.organizationId }
+    });
+    if (!existing) return res.status(404).json({ error: 'Customer not found' });
+
+    const customer = await prisma.customer.update({
+      where: { id: req.params.id },
+      data: { name, email, phone }
+    });
     res.json(customer);
   } catch (e) { res.status(500).json({ error: 'Something went wrong' }); }
 });
 
 router.delete('/:id', verifyToken, requireEmployee, async (req, res) => {
   try {
+    const existing = await prisma.customer.findFirst({
+      where: { id: req.params.id, organizationId: req.user.organizationId }
+    });
+    if (!existing) return res.status(404).json({ error: 'Customer not found' });
+
     await prisma.customer.delete({ where: { id: req.params.id } });
     res.json({ message: 'Customer deleted' });
   } catch (e) {

@@ -11,7 +11,7 @@ function Shape({ className, style }) {
 }
 
 export default function Signup() {
-  const [form, setForm]       = useState({ name: '', email: '', password: '' });
+  const [form, setForm]       = useState({ name: '', email: '', password: '', businessName: '' });
   const [loading, setLoading] = useState(false);
   const { setAuth }           = useAuthStore();
   const navigate              = useNavigate();
@@ -19,6 +19,7 @@ export default function Signup() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (form.password.length < 8) return toast.error('Password must be at least 8 characters');
+    if (!form.businessName.trim()) return toast.error('Cafe / Hotel name is required');
     setLoading(true);
     try {
       const res = await api.post('/auth/signup', form);
@@ -84,6 +85,19 @@ export default function Signup() {
                 <input type="text" required value={form.name}
                   onChange={e => setForm({ ...form, name: e.target.value })}
                   className="input-brand pl-10" placeholder="John Doe" />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-widest mb-2"
+                     style={{ color: 'var(--brand-fg)', fontFamily: "'Outfit', system-ui, sans-serif" }}>
+                Cafe / Hotel Name
+              </label>
+              <div className="relative">
+                <Coffee size={16} strokeWidth={2.5} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--brand-muted-fg)' }} />
+                <input type="text" required value={form.businessName}
+                  onChange={e => setForm({ ...form, businessName: e.target.value })}
+                  className="input-brand pl-10" placeholder="My Awesome Cafe" />
               </div>
             </div>
 

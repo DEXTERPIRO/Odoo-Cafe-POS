@@ -12,9 +12,10 @@ const limiter = rateLimit({
 });
 
 const signupValidation = validate({
-  name:     [v.required, v.minLength(2)],
-  email:    [v.required, v.isEmail],
-  password: [v.required, v.minLength(8)],
+  name:         [v.required, v.minLength(2)],
+  email:        [v.required, v.isEmail],
+  password:     [v.required, v.minLength(8)],
+  businessName: [v.required, v.minLength(2)],
 });
 
 const loginValidation = validate({

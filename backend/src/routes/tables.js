@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 router.get('/', verifyToken, async (req, res) => {
   try {
     const tables = await prisma.table.findMany({
-      where: { isActive: true },
+      where: { isActive: true, organizationId: req.user.organizationId },
       include: { floor: true }
     });
     res.json(tables);
@@ -19,8 +19,18 @@ router.post('/', verifyToken, requireAdmin, async (req, res) => {
     if (!tableNumber) return res.status(400).json({ error: 'Table number required' });
     const parsedSeats = parseInt(seats, 10);
     if (isNaN(parsedSeats) || parsedSeats <= 0) return res.status(400).json({ error: 'Seats must be a positive number' });
-    const exists = await prisma.table.findFirst({ where: { tableNumber: tableNumber.trim().toUpperCase(), floorId, isActive: true } });
+
+    // Verify floor belongs to user's organization
+    const floor = await prisma.floor.findFirst({
+      where: { id: floorId, organizationId: req.user.organizationId }
+    });
+    if (!floor) return res.status(404).json({ error: 'Floor not found' });
+
+    const exists = await prisma.table.findFirst({
+      where: { tableNumber: tableNumber.trim().toUpperCase(), floorId, isActive: true, organizationId: req.user.organizationId }
+    });
     if (exists) return res.status(400).json({ error: 'Table number already exists on this floor' });
+
     const table = await prisma.table.create({
       data: {
         tableNumber: tableNumber.trim().toUpperCase(),
@@ -28,7 +38,8 @@ router.post('/', verifyToken, requireAdmin, async (req, res) => {
         floorId,
         x: x !== undefined ? parseInt(x, 10) : 0,
         y: y !== undefined ? parseInt(y, 10) : 0,
-        shape: shape || 'square'
+        shape: shape || 'square',
+        organizationId: req.user.organizationId
       }
     });
     res.status(201).json(table);
@@ -41,18 +52,26 @@ router.post('/', verifyToken, requireAdmin, async (req, res) => {
 router.put('/:id', verifyToken, requireAdmin, async (req, res) => {
   try {
     const { tableNumber, seats, isActive, x, y, shape } = req.body;
+    
+    // Verify table belongs to user's organization
+    const existingTable = await prisma.table.findFirst({
+      where: { id: req.params.id, organizationId: req.user.organizationId }
+    });
+    if (!existingTable) return res.status(404).json({ error: 'Table not found' });
+
     let parsedSeats = undefined;
     if (seats !== undefined) {
       parsedSeats = parseInt(seats, 10);
       if (isNaN(parsedSeats) || parsedSeats <= 0) return res.status(400).json({ error: 'Seats must be a positive number' });
     }
+
     if (tableNumber) {
-      const existingTable = await prisma.table.findUnique({ where: { id: req.params.id } });
       const exists = await prisma.table.findFirst({
-        where: { tableNumber: tableNumber.trim().toUpperCase(), floorId: existingTable.floorId, isActive: true, NOT: { id: req.params.id } }
+        where: { tableNumber: tableNumber.trim().toUpperCase(), floorId: existingTable.floorId, isActive: true, organizationId: req.user.organizationId, NOT: { id: req.params.id } }
       });
       if (exists) return res.status(400).json({ error: 'Table number already exists on this floor' });
     }
+
     const table = await prisma.table.update({
       where: { id: req.params.id },
       data: {
@@ -73,6 +92,12 @@ router.put('/:id', verifyToken, requireAdmin, async (req, res) => {
 
 router.delete('/:id', verifyToken, requireAdmin, async (req, res) => {
   try {
+    // Verify table belongs to user's organization
+    const existingTable = await prisma.table.findFirst({
+      where: { id: req.params.id, organizationId: req.user.organizationId }
+    });
+    if (!existingTable) return res.status(404).json({ error: 'Table not found' });
+
     await prisma.table.update({ where: { id: req.params.id }, data: { isActive: false } });
     res.json({ message: 'Table deleted' });
   } catch (e) { res.status(500).json({ error: 'Something went wrong' }); }

@@ -14,7 +14,7 @@ const productValidation = validate({
 router.get('/', verifyToken, async (req, res) => {
   try {
     const products = await prisma.product.findMany({
-      where: { isActive: true },
+      where: { isActive: true, organizationId: req.user.organizationId },
       include: { category: true },
       orderBy: { name: 'asc' },
     });
@@ -29,9 +29,15 @@ router.get('/frequently-together/:productId', verifyToken, async (req, res) => {
   try {
     const { productId } = req.params;
 
-    // Find all orders that contain this product
+    // Verify product belongs to user's organization
+    const product = await prisma.product.findFirst({
+      where: { id: productId, organizationId: req.user.organizationId }
+    });
+    if (!product) return res.status(404).json({ error: 'Product not found' });
+
+    // Find all orders that contain this product for this organization
     const ordersWithProduct = await prisma.orderLine.findMany({
-      where: { productId },
+      where: { productId, order: { organizationId: req.user.organizationId } },
       select: { orderId: true },
     });
     const orderIds = ordersWithProduct.map(o => o.orderId);
@@ -52,7 +58,7 @@ router.get('/frequently-together/:productId', verifyToken, async (req, res) => {
 
     const productIds = coProducts.map(p => p.productId);
     const products = await prisma.product.findMany({
-      where: { id: { in: productIds }, isActive: true },
+      where: { id: { in: productIds }, isActive: true, organizationId: req.user.organizationId },
       include: { category: true },
     });
 
@@ -75,9 +81,14 @@ router.post('/', verifyToken, requireAdmin, productValidation, async (req, res) 
     let catId = categoryId;
     if (typeof categoryId === 'object' && categoryId?.name) {
       const newCat = await prisma.productCategory.create({
-        data: { name: categoryId.name, color: categoryId.color || '#6B7280' },
+        data: { name: categoryId.name, color: categoryId.color || '#6B7280', organizationId: req.user.organizationId },
       });
       catId = newCat.id;
+    } else {
+      const cat = await prisma.productCategory.findFirst({
+        where: { id: categoryId, organizationId: req.user.organizationId }
+      });
+      if (!cat) return res.status(404).json({ error: 'Category not found' });
     }
 
     const product = await prisma.product.create({
@@ -89,6 +100,7 @@ router.post('/', verifyToken, requireAdmin, productValidation, async (req, res) 
         tax:           parseFloat(tax) || 0,
         description:   description?.trim() || null,
         showOnKds:     showOnKds !== false,
+        organizationId: req.user.organizationId,
       },
       include: { category: true },
     });
@@ -102,6 +114,19 @@ router.post('/', verifyToken, requireAdmin, productValidation, async (req, res) 
 router.put('/:id', verifyToken, requireAdmin, async (req, res) => {
   try {
     const { name, categoryId, price, unitOfMeasure, tax, description, showOnKds } = req.body;
+    
+    const existing = await prisma.product.findFirst({
+      where: { id: req.params.id, organizationId: req.user.organizationId }
+    });
+    if (!existing) return res.status(404).json({ error: 'Product not found' });
+
+    if (categoryId) {
+      const cat = await prisma.productCategory.findFirst({
+        where: { id: categoryId, organizationId: req.user.organizationId }
+      });
+      if (!cat) return res.status(404).json({ error: 'Category not found' });
+    }
+
     const product = await prisma.product.update({
       where: { id: req.params.id },
       data: {
@@ -125,7 +150,12 @@ router.put('/:id', verifyToken, requireAdmin, async (req, res) => {
 
 router.delete('/:id', verifyToken, requireAdmin, async (req, res) => {
   try {
-    const product = await prisma.product.update({ where: { id: req.params.id }, data: { isActive: false } });
+    const existing = await prisma.product.findFirst({
+      where: { id: req.params.id, organizationId: req.user.organizationId }
+    });
+    if (!existing) return res.status(404).json({ error: 'Product not found' });
+
+    await prisma.product.update({ where: { id: req.params.id }, data: { isActive: false } });
     res.json({ message: 'Product deactivated' });
   } catch (e) {
     console.error(e);

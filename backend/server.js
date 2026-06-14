@@ -54,7 +54,13 @@ app.use((err, req, res, next) => {
 
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
-  socket.on('join-kds', () => socket.join('kds-room'));
+  socket.on('join-kds', (orgId) => {
+    if (orgId) {
+      socket.join(`kds-room-${orgId}`);
+    } else {
+      socket.join('kds-room');
+    }
+  });
   socket.on('disconnect', () => console.log('Client disconnected:', socket.id));
 });
 

@@ -18,7 +18,7 @@ router.get('/dashboard', verifyToken, requireEmployee, async (req, res) => {
       };
     }
 
-    const where = { status: 'PAID' };
+    const where = { status: 'PAID', organizationId: req.user.organizationId };
     if (dateFilter.gte) where.createdAt = dateFilter;
     if (employeeId) where.createdById = employeeId;
     if (sessionId) where.sessionId = sessionId;
@@ -96,7 +96,7 @@ router.get('/export-csv', verifyToken, requireEmployee, async (req, res) => {
       };
     }
 
-    const where = { status: 'PAID' };
+    const where = { status: 'PAID', organizationId: req.user.organizationId };
     if (dateFilter.gte) where.createdAt = dateFilter;
     if (employeeId) where.createdById = employeeId;
 
@@ -180,7 +180,7 @@ router.get('/export-xlsx', verifyToken, requireEmployee, async (req, res) => {
       };
     }
 
-    const where = { status: 'PAID' };
+    const where = { status: 'PAID', organizationId: req.user.organizationId };
     if (dateFilter.gte) where.createdAt = dateFilter;
     if (employeeId) where.createdById = employeeId;
 

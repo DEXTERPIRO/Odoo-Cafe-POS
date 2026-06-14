@@ -82,7 +82,7 @@ export default function BackendLayout() {
                 className="text-lg font-bold leading-none"
                 style={{ fontFamily: "'Outfit', system-ui, sans-serif", color: 'var(--brand-fg)' }}
               >
-                Cafe POS
+                {user?.organizationName || 'Cafe POS'}
               </div>
               <div className="text-[10px] font-semibold uppercase tracking-wider mt-0.5"
                 style={{ color: 'var(--brand-muted-fg)' }}>
@@ -202,7 +202,7 @@ export default function BackendLayout() {
               <div className="w-8 h-8 rounded-lg flex items-center justify-center border-2 border-[#1E293B] bg-[#8B5CF6] shadow-pop-xs">
                 <Coffee size={14} strokeWidth={2.5} color="#fff" />
               </div>
-              <span className="text-sm md:text-base font-bold text-slate-800 font-outfit leading-none">Cafe POS Admin</span>
+              <span className="text-sm md:text-base font-bold text-slate-800 font-outfit leading-none">{user?.organizationName || 'Cafe POS Admin'}</span>
             </div>
           </div>
 

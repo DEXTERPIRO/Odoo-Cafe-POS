@@ -11,7 +11,8 @@ router.get('/tickets', verifyToken, async (req, res) => {
         order: {
           status: {
             not: 'CANCELLED'
-          }
+          },
+          organizationId: req.user.organizationId
         },
         NOT: {
           stage: 'COMPLETED',
@@ -37,7 +38,10 @@ router.get('/tickets', verifyToken, async (req, res) => {
 router.put('/tickets/:id/stage', verifyToken, async (req, res) => {
   try {
     const { stage } = req.body;
-    const ticket = await prisma.kdsTicket.findUnique({ where: { id: req.params.id } });
+    const ticket = await prisma.kdsTicket.findFirst({
+      where: { id: req.params.id, order: { organizationId: req.user.organizationId } }
+    });
+    if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
     
     let nextStage = stage;
     if (!nextStage) {
@@ -65,14 +69,23 @@ router.put('/tickets/:id/stage', verifyToken, async (req, res) => {
     updated.order.status = orderStatus;
 
     const io = req.app.get('io');
-    io.to('kds-room').emit('ticket-updated', updated);
+    io.to(`kds-room-${req.user.organizationId}`).emit('ticket-updated', updated);
     res.json(updated);
   } catch (e) { res.status(500).json({ error: 'Something went wrong' }); }
 });
 
 router.put('/tickets/:ticketId/items/:lineId/done', verifyToken, async (req, res) => {
   try {
-    const line = await prisma.orderLine.findUnique({ where: { id: req.params.lineId } });
+    const ticket = await prisma.kdsTicket.findFirst({
+      where: { id: req.params.ticketId, order: { organizationId: req.user.organizationId } }
+    });
+    if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
+
+    const line = await prisma.orderLine.findFirst({
+      where: { id: req.params.lineId, orderId: ticket.orderId }
+    });
+    if (!line) return res.status(404).json({ error: 'Order line not found' });
+
     const nextStatus = line.kdsStatus === 'DONE' ? 'PENDING' : 'DONE';
     
     const updatedLine = await prisma.orderLine.update({
@@ -81,7 +94,7 @@ router.put('/tickets/:ticketId/items/:lineId/done', verifyToken, async (req, res
     });
     
     const io = req.app.get('io');
-    io.to('kds-room').emit('item-status-updated', {
+    io.to(`kds-room-${req.user.organizationId}`).emit('item-status-updated', {
       ticketId: req.params.ticketId,
       lineId: req.params.lineId,
       kdsStatus: nextStatus

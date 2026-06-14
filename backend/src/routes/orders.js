@@ -5,19 +5,24 @@ const { applyPromotions } = require('../utils/promotionEngine');
 const prisma = new PrismaClient();
 const { sendReceiptEmail } = require('../utils/emailService');
 
-const calcOrder = async (lines, couponCode) => {
+const calcOrder = async (lines, couponCode, organizationId) => {
   let subtotal = 0;
   const processedLines = [];
   for (const line of lines) {
-    const product = await prisma.product.findUnique({ where: { id: line.productId } });
+    const product = await prisma.product.findFirst({
+      where: { id: line.productId, organizationId }
+    });
+    if (!product) continue;
     const lineTotal = parseFloat(product.price) * line.quantity;
     subtotal += lineTotal;
     processedLines.push({ productId: line.productId, quantity: line.quantity, unitPrice: parseFloat(product.price), lineTotal, discount: 0 });
   }
-  const { totalDiscount: promoDiscount } = await applyPromotions(lines, subtotal);
+  const { totalDiscount: promoDiscount } = await applyPromotions(lines, subtotal, organizationId);
   let couponDiscount = 0;
   if (couponCode) {
-    const coupon = await prisma.coupon.findFirst({ where: { code: couponCode.trim().toUpperCase(), isActive: true } });
+    const coupon = await prisma.coupon.findFirst({
+      where: { code: couponCode.trim().toUpperCase(), isActive: true, organizationId }
+    });
     if (coupon) {
       couponDiscount = coupon.discountType === 'PERCENTAGE' ? (subtotal * parseFloat(coupon.discountValue)) / 100 : parseFloat(coupon.discountValue);
     }
@@ -33,11 +38,28 @@ const calcOrder = async (lines, couponCode) => {
 router.get('/', verifyToken, requireEmployee, async (req, res) => {
   try {
     const { sessionId, status } = req.query;
-    const where = {};
-    if (sessionId) where.sessionId = sessionId;
+    const where = { organizationId: req.user.organizationId };
+    
+    if (sessionId) {
+      // Security: verify session belongs to organization
+      const sess = await prisma.posSession.findFirst({
+        where: { id: sessionId, organizationId: req.user.organizationId }
+      });
+      if (!sess) return res.status(404).json({ error: 'Session not found' });
+      where.sessionId = sessionId;
+    }
     if (status) where.status = status;
+    
     const orders = await prisma.order.findMany({
-      where, include: { lines: { include: { product: true } }, customers: true, table: true, kdsTicket: true, payments: true, createdBy: { select: { name: true } } },
+      where,
+      include: {
+        lines: { include: { product: true } },
+        customers: true,
+        table: true,
+        kdsTicket: true,
+        payments: true,
+        createdBy: { select: { name: true } }
+      },
       orderBy: { createdAt: 'desc' }
     });
     res.json(orders);
@@ -47,6 +69,21 @@ router.get('/', verifyToken, requireEmployee, async (req, res) => {
 router.post('/', verifyToken, requireEmployee, async (req, res) => {
   try {
     const { tableId, customerId, customerIds, lines, couponCode, sessionId } = req.body;
+    
+    // Verify session belongs to organization
+    const session = await prisma.posSession.findFirst({
+      where: { id: sessionId, organizationId: req.user.organizationId }
+    });
+    if (!session) return res.status(404).json({ error: 'Session not found or access denied' });
+
+    // Verify table belongs to organization
+    if (tableId) {
+      const table = await prisma.table.findFirst({
+        where: { id: tableId, organizationId: req.user.organizationId }
+      });
+      if (!table) return res.status(404).json({ error: 'Table not found or access denied' });
+    }
+
     let customerConnect = [];
     if (Array.isArray(customerIds)) {
       customerConnect = customerIds.map(id => ({ id }));
@@ -56,16 +93,37 @@ router.post('/', verifyToken, requireEmployee, async (req, res) => {
       customerConnect = [{ id: customerId }];
     }
 
+    // Verify customers belong to organization
+    if (customerConnect.length > 0) {
+      const dbCustCount = await prisma.customer.count({
+        where: {
+          id: { in: customerConnect.map(c => c.id) },
+          organizationId: req.user.organizationId
+        }
+      });
+      if (dbCustCount !== customerConnect.length) {
+        return res.status(404).json({ error: 'One or more customers not found or access denied' });
+      }
+    }
+
     const finalLines = lines || [];
     const ts = Date.now().toString().slice(-6);
     const rand = Math.floor(Math.random() * 100).toString().padStart(2, '0');
     const orderNumber = `ORD-${ts}${rand}`;
-    const { processedLines, subtotal, taxAmount, discountAmount, total } = await calcOrder(finalLines, couponCode);
+    const { processedLines, subtotal, taxAmount, discountAmount, total } = await calcOrder(finalLines, couponCode, req.user.organizationId);
+    
     const order = await prisma.order.create({
       data: {
-        orderNumber, sessionId, tableId, couponCode,
-        subtotal, taxAmount, discountAmount, total,
+        orderNumber,
+        sessionId,
+        tableId,
+        couponCode,
+        subtotal,
+        taxAmount,
+        discountAmount,
+        total,
         createdById: req.user.id,
+        organizationId: req.user.organizationId,
         lines: { create: processedLines },
         customers: { connect: customerConnect }
       },
@@ -78,8 +136,8 @@ router.post('/', verifyToken, requireEmployee, async (req, res) => {
 
 router.get('/:id', verifyToken, requireEmployee, async (req, res) => {
   try {
-    const order = await prisma.order.findUnique({
-      where: { id: req.params.id },
+    const order = await prisma.order.findFirst({
+      where: { id: req.params.id, organizationId: req.user.organizationId },
       include: { lines: { include: { product: { include: { category: true } } } }, customers: true, table: true, kdsTicket: true, payments: true }
     });
     if (!order) return res.status(404).json({ error: 'Order not found' });
@@ -89,6 +147,11 @@ router.get('/:id', verifyToken, requireEmployee, async (req, res) => {
 
 router.put('/:id/send-kitchen', verifyToken, requireEmployee, async (req, res) => {
   try {
+    const existing = await prisma.order.findFirst({
+      where: { id: req.params.id, organizationId: req.user.organizationId }
+    });
+    if (!existing) return res.status(404).json({ error: 'Order not found' });
+
     const order = await prisma.order.update({
       where: { id: req.params.id },
       data: { status: 'SENT_TO_KITCHEN' },
@@ -117,10 +180,11 @@ router.put('/:id/send-kitchen', verifyToken, requireEmployee, async (req, res) =
     });
 
     const io = req.app.get('io');
+    const roomName = `kds-room-${req.user.organizationId}`;
     if (isNew) {
-      io.to('kds-room').emit('new-order', fullTicket);
+      io.to(roomName).emit('new-order', fullTicket);
     } else {
-      io.to('kds-room').emit('ticket-updated', fullTicket);
+      io.to(roomName).emit('ticket-updated', fullTicket);
     }
     res.json(order);
   } catch (e) { console.error(e); res.status(500).json({ error: 'Something went wrong' }); }
@@ -133,7 +197,9 @@ router.put('/:id/pay', verifyToken, requireEmployee, async (req, res) => {
       return res.status(404).json({ error: 'Payment method or payments array required' });
     }
 
-    const existingOrder = await prisma.order.findUnique({ where: { id: req.params.id } });
+    const existingOrder = await prisma.order.findFirst({
+      where: { id: req.params.id, organizationId: req.user.organizationId }
+    });
     if (!existingOrder) return res.status(404).json({ error: 'Order not found' });
 
     let paymentRecords = [];
@@ -164,8 +230,9 @@ router.put('/:id/pay', verifyToken, requireEmployee, async (req, res) => {
 
     if (order.tableId) await prisma.table.update({ where: { id: order.tableId }, data: { currentOrderId: null } });
     await prisma.posSession.update({ where: { id: order.sessionId }, data: { lastSaleAmount: order.total, totalOrders: { increment: 1 }, totalRevenue: { increment: order.total } } });
+    
     const io = req.app.get('io');
-    io.to('kds-room').emit('order-paid', { orderId: order.id });
+    io.to(`kds-room-${req.user.organizationId}`).emit('order-paid', { orderId: order.id });
     res.json(order);
   } catch (e) {
     console.error(e);
@@ -175,8 +242,8 @@ router.put('/:id/pay', verifyToken, requireEmployee, async (req, res) => {
 
 router.put('/:id/cancel', verifyToken, requireEmployee, async (req, res) => {
   try {
-    const existing = await prisma.order.findUnique({
-      where: { id: req.params.id },
+    const existing = await prisma.order.findFirst({
+      where: { id: req.params.id, organizationId: req.user.organizationId },
       include: { kdsTicket: true }
     });
     if (!existing) return res.status(404).json({ error: 'Order not found' });
@@ -192,26 +259,19 @@ router.put('/:id/cancel', verifyToken, requireEmployee, async (req, res) => {
     if (order.tableId) await prisma.table.update({ where: { id: order.tableId }, data: { currentOrderId: null } });
 
     const io = req.app.get('io');
-    io.to('kds-room').emit('order-cancelled', { orderId: order.id });
+    io.to(`kds-room-${req.user.organizationId}`).emit('order-cancelled', { orderId: order.id });
 
     res.json(order);
   } catch (e) { res.status(500).json({ error: 'Something went wrong' }); }
 });
+
 router.put('/:id', verifyToken, requireEmployee, async (req, res) => {
   try {
     const { id } = req.params;
     const { tableId, customerId, customerIds, lines, couponCode } = req.body;
-    let customerConnect = [];
-    if (Array.isArray(customerIds)) {
-      customerConnect = customerIds.map(id => ({ id }));
-    } else if (Array.isArray(customerId)) {
-      customerConnect = customerId.map(id => ({ id }));
-    } else if (customerId) {
-      customerConnect = [{ id: customerId }];
-    }
-
-    const existingOrder = await prisma.order.findUnique({
-      where: { id },
+    
+    const existingOrder = await prisma.order.findFirst({
+      where: { id, organizationId: req.user.organizationId },
       include: { lines: true }
     });
     if (!existingOrder) {
@@ -221,8 +281,38 @@ router.put('/:id', verifyToken, requireEmployee, async (req, res) => {
       return res.status(400).json({ error: 'Only draft, kitchen, or ready orders can be updated' });
     }
 
+    // Verify table belongs to organization
+    if (tableId) {
+      const table = await prisma.table.findFirst({
+        where: { id: tableId, organizationId: req.user.organizationId }
+      });
+      if (!table) return res.status(404).json({ error: 'Table not found or access denied' });
+    }
+
+    let customerConnect = [];
+    if (Array.isArray(customerIds)) {
+      customerConnect = customerIds.map(id => ({ id }));
+    } else if (Array.isArray(customerId)) {
+      customerConnect = customerId.map(id => ({ id }));
+    } else if (customerId) {
+      customerConnect = [{ id: customerId }];
+    }
+
+    // Verify customers belong to organization
+    if (customerConnect.length > 0) {
+      const dbCustCount = await prisma.customer.count({
+        where: {
+          id: { in: customerConnect.map(c => c.id) },
+          organizationId: req.user.organizationId
+        }
+      });
+      if (dbCustCount !== customerConnect.length) {
+        return res.status(404).json({ error: 'One or more customers not found or access denied' });
+      }
+    }
+
     const finalLines = lines || [];
-    const { processedLines, subtotal, taxAmount, discountAmount, total } = await calcOrder(finalLines, couponCode);
+    const { processedLines, subtotal, taxAmount, discountAmount, total } = await calcOrder(finalLines, couponCode, req.user.organizationId);
 
     const order = await prisma.$transaction(async (tx) => {
       // Delete old lines
@@ -280,7 +370,7 @@ router.put('/:id', verifyToken, requireEmployee, async (req, res) => {
         }
       });
       const io = req.app.get('io');
-      io.to('kds-room').emit('ticket-updated', fullTicket);
+      io.to(`kds-room-${req.user.organizationId}`).emit('ticket-updated', fullTicket);
     }
 
     res.json(order);
@@ -289,13 +379,14 @@ router.put('/:id', verifyToken, requireEmployee, async (req, res) => {
     res.status(500).json({ error: 'Something went wrong' });
   }
 });
+
 router.post('/:id/send-receipt', verifyToken, requireEmployee, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email address required' });
 
-    const order = await prisma.order.findUnique({
-      where: { id: req.params.id },
+    const order = await prisma.order.findFirst({
+      where: { id: req.params.id, organizationId: req.user.organizationId },
       include: {
         lines: { include: { product: true } },
         table: true,

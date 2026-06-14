@@ -16,7 +16,7 @@ function formatDuration(ms) {
 router.get('/current', verifyToken, async (req, res) => {
   try {
     const session = await prisma.posSession.findFirst({
-      where: { status: 'OPEN' },
+      where: { status: 'OPEN', organizationId: req.user.organizationId },
       include: { openedBy: { select: { id: true, name: true, email: true } } },
       orderBy: { openedAt: 'desc' },
     });
@@ -27,10 +27,17 @@ router.get('/current', verifyToken, async (req, res) => {
 /* POST /api/session/open ───────────────────────────────── */
 router.post('/open', verifyToken, requireEmployee, async (req, res) => {
   try {
-    const existing = await prisma.posSession.findFirst({ where: { status: 'OPEN' } });
+    const existing = await prisma.posSession.findFirst({
+      where: { status: 'OPEN', organizationId: req.user.organizationId }
+    });
     if (existing) return res.json(existing);
+    
     const session = await prisma.posSession.create({
-      data: { openedById: req.user.id, status: 'OPEN' },
+      data: {
+        openedById: req.user.id,
+        status: 'OPEN',
+        organizationId: req.user.organizationId
+      },
       include: { openedBy: { select: { id: true, name: true, email: true } } },
     });
     res.status(201).json(session);
@@ -40,7 +47,9 @@ router.post('/open', verifyToken, requireEmployee, async (req, res) => {
 /* POST /api/session/close ──────────────────────────────── */
 router.post('/close', verifyToken, requireEmployee, async (req, res) => {
   try {
-    const session = await prisma.posSession.findFirst({ where: { status: 'OPEN' } });
+    const session = await prisma.posSession.findFirst({
+      where: { status: 'OPEN', organizationId: req.user.organizationId }
+    });
     if (!session) return res.status(404).json({ error: 'No open session' });
 
     const closedAt = new Date();
@@ -48,7 +57,7 @@ router.post('/close', verifyToken, requireEmployee, async (req, res) => {
 
     /* All orders belonging to this session */
     const orders = await prisma.order.findMany({
-      where: { sessionId: session.id },
+      where: { sessionId: session.id, organizationId: req.user.organizationId },
       include: { lines: { include: { product: true } } },
     });
 
@@ -63,7 +72,7 @@ router.post('/close', verifyToken, requireEmployee, async (req, res) => {
 
     /* Payment breakdown from individual payments */
     const payments = await prisma.payment.findMany({
-      where: { order: { sessionId: session.id } }
+      where: { order: { sessionId: session.id, organizationId: req.user.organizationId } }
     });
 
     const paymentBreakdown = { CASH: 0, CARD: 0, UPI: 0 };
@@ -126,9 +135,13 @@ router.post('/close', verifyToken, requireEmployee, async (req, res) => {
 /* GET /api/session/draft-count ─────────────────────────── */
 router.get('/draft-count', verifyToken, async (req, res) => {
   try {
-    const session = await prisma.posSession.findFirst({ where: { status: 'OPEN' } });
+    const session = await prisma.posSession.findFirst({
+      where: { status: 'OPEN', organizationId: req.user.organizationId }
+    });
     if (!session) return res.json({ count: 0 });
-    const count = await prisma.order.count({ where: { sessionId: session.id, status: 'DRAFT' } });
+    const count = await prisma.order.count({
+      where: { sessionId: session.id, status: 'DRAFT', organizationId: req.user.organizationId }
+    });
     res.json({ count });
   } catch (e) { res.status(500).json({ error: 'Something went wrong' }); }
 });

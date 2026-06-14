@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
+import { useAuthStore } from '../../store/authStore';
 import api from '../../api/client';
 import toast from 'react-hot-toast';
 import { Coffee, ArrowLeft, Flame, Clock, CheckCircle2, Settings, Utensils, Loader2, Check, AlertCircle, AlertTriangle, Volume2, VolumeX, Play, ShoppingBag, RotateCcw, ChefHat } from 'lucide-react';
@@ -248,6 +249,7 @@ function TicketCard({ ticket, onStageUpdate, onItemToggle }) {
    KITCHEN DISPLAY — MAIN
 ───────────────────────────────────────────────────────── */
 export default function KitchenDisplay() {
+  const { user } = useAuthStore();
   const [tickets, setTickets] = useState([]);
   const [clock, setClock] = useState(new Date());
   const [loading, setLoading] = useState(true);
@@ -323,7 +325,7 @@ export default function KitchenDisplay() {
     });
     socketRef.current = socket;
 
-    socket.emit('join-kds');
+    socket.emit('join-kds', user?.organizationId);
 
     socket.on('new-order', (ticket) => {
       setTickets(prev => {

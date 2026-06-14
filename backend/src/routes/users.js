@@ -19,6 +19,7 @@ const passwordValidation = validate({
 router.get('/', verifyToken, requireAdmin, async (req, res) => {
   try {
     const users = await prisma.user.findMany({
+      where: { organizationId: req.user.organizationId },
       select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -36,7 +37,7 @@ router.post('/', verifyToken, requireAdmin, userValidation, async (req, res) => 
     if (exists) return res.status(400).json({ error: 'Email already registered', errors: { email: 'Already in use' } });
     const hashed = await bcrypt.hash(password, 12);
     const user = await prisma.user.create({
-      data: { name: name.trim(), email: email.toLowerCase().trim(), password: hashed, role },
+      data: { name: name.trim(), email: email.toLowerCase().trim(), password: hashed, role, organizationId: req.user.organizationId },
     });
     res.status(201).json({ id: user.id, name: user.name, email: user.email, role: user.role });
   } catch (e) {
@@ -47,6 +48,12 @@ router.post('/', verifyToken, requireAdmin, userValidation, async (req, res) => 
 
 router.put('/:id/password', verifyToken, requireAdmin, passwordValidation, async (req, res) => {
   try {
+    // Verify user belongs to same organization
+    const targetUser = await prisma.user.findFirst({
+      where: { id: req.params.id, organizationId: req.user.organizationId }
+    });
+    if (!targetUser) return res.status(404).json({ error: 'User not found' });
+
     const hashed = await bcrypt.hash(req.body.password, 12);
     await prisma.user.update({ where: { id: req.params.id }, data: { password: hashed } });
     res.json({ message: 'Password updated' });
@@ -62,6 +69,13 @@ router.put('/:id/archive', verifyToken, requireAdmin, async (req, res) => {
     if (req.params.id === req.user.id) {
       return res.status(400).json({ error: 'You cannot archive your own account' });
     }
+    
+    // Verify user belongs to same organization
+    const targetUser = await prisma.user.findFirst({
+      where: { id: req.params.id, organizationId: req.user.organizationId }
+    });
+    if (!targetUser) return res.status(404).json({ error: 'User not found' });
+
     await prisma.user.update({ where: { id: req.params.id }, data: { isActive: false } });
     res.json({ message: 'User archived' });
   } catch (e) {
@@ -77,6 +91,13 @@ router.delete('/:id', verifyToken, requireAdmin, async (req, res) => {
     if (req.params.id === req.user.id) {
       return res.status(400).json({ error: 'You cannot delete your own account' });
     }
+    
+    // Verify user belongs to same organization
+    const targetUser = await prisma.user.findFirst({
+      where: { id: req.params.id, organizationId: req.user.organizationId }
+    });
+    if (!targetUser) return res.status(404).json({ error: 'User not found' });
+
     await prisma.user.delete({ where: { id: req.params.id } });
     res.json({ message: 'User deleted' });
   } catch (e) {

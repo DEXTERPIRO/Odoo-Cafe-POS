@@ -12,7 +12,10 @@ const couponValidation = validate({
 
 router.get('/', verifyToken, async (req, res) => {
   try {
-    const coupons = await prisma.coupon.findMany({ orderBy: { createdAt: 'desc' } });
+    const coupons = await prisma.coupon.findMany({
+      where: { organizationId: req.user.organizationId },
+      orderBy: { createdAt: 'desc' }
+    });
     res.json(coupons);
   } catch (e) {
     console.error(e);
@@ -23,10 +26,17 @@ router.get('/', verifyToken, async (req, res) => {
 router.post('/', verifyToken, requireAdmin, couponValidation, async (req, res) => {
   try {
     const { code, discountType, discountValue } = req.body;
-    const existing = await prisma.coupon.findFirst({ where: { code: code.trim().toUpperCase() } });
+    const existing = await prisma.coupon.findFirst({
+      where: { code: code.trim().toUpperCase(), organizationId: req.user.organizationId }
+    });
     if (existing) return res.status(400).json({ error: 'Coupon code already exists', errors: { code: 'Code already in use' } });
     const coupon = await prisma.coupon.create({
-      data: { code: code.trim().toUpperCase(), discountType, discountValue: parseFloat(discountValue) },
+      data: {
+        code: code.trim().toUpperCase(),
+        discountType,
+        discountValue: parseFloat(discountValue),
+        organizationId: req.user.organizationId
+      },
     });
     res.status(201).json(coupon);
   } catch (e) {
@@ -39,7 +49,9 @@ router.post('/validate', verifyToken, async (req, res) => {
   try {
     const { code } = req.body;
     if (!code) return res.status(400).json({ error: 'Coupon code is required' });
-    const coupon = await prisma.coupon.findFirst({ where: { code: code.trim().toUpperCase(), isActive: true } });
+    const coupon = await prisma.coupon.findFirst({
+      where: { code: code.trim().toUpperCase(), isActive: true, organizationId: req.user.organizationId }
+    });
     if (!coupon) return res.status(404).json({ error: 'Invalid or expired coupon code' });
     res.json(coupon);
   } catch (e) {
@@ -51,6 +63,11 @@ router.post('/validate', verifyToken, async (req, res) => {
 router.put('/:id', verifyToken, requireAdmin, async (req, res) => {
   try {
     const { isActive, discountValue } = req.body;
+    const existing = await prisma.coupon.findFirst({
+      where: { id: req.params.id, organizationId: req.user.organizationId }
+    });
+    if (!existing) return res.status(404).json({ error: 'Coupon not found' });
+
     const coupon = await prisma.coupon.update({
       where: { id: req.params.id },
       data: { isActive, discountValue: discountValue ? parseFloat(discountValue) : undefined },
@@ -65,6 +82,11 @@ router.put('/:id', verifyToken, requireAdmin, async (req, res) => {
 
 router.delete('/:id', verifyToken, requireAdmin, async (req, res) => {
   try {
+    const existing = await prisma.coupon.findFirst({
+      where: { id: req.params.id, organizationId: req.user.organizationId }
+    });
+    if (!existing) return res.status(404).json({ error: 'Coupon not found' });
+
     await prisma.coupon.delete({ where: { id: req.params.id } });
     res.json({ message: 'Coupon deleted' });
   } catch (e) {

@@ -1,8 +1,11 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
-const applyPromotions = async (lines, subtotal) => {
-  const promotions = await prisma.promotion.findMany({ where: { isActive: true }, include: { product: true } });
+const applyPromotions = async (lines, subtotal, organizationId) => {
+  const promotions = await prisma.promotion.findMany({
+    where: { isActive: true, organizationId },
+    include: { product: true }
+  });
   let totalDiscount = 0;
   const appliedPromos = [];
 
