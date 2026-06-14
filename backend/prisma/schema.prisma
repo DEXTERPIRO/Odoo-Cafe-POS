@@ -185,6 +185,17 @@ model Order {
   createdBy        User        @relation(fields: [createdById], references: [id])
   lines            OrderLine[]
   kdsTicket        KdsTicket?
+  payments         Payment[]
+}
+
+model Payment {
+  id               String      @id @default(uuid())
+  orderId          String
+  amount           Decimal     @db.Decimal(10,2)
+  paymentMethod    String
+  paymentReference String?
+  createdAt        DateTime    @default(now())
+  order            Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }
 
 model OrderLine {

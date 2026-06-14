@@ -50,8 +50,11 @@ function ReceiptModal({ order, onClose, onNewOrder }) {
       .map(l => `<tr><td>${l.product?.name} &times; ${l.quantity}</td><td class="amt">${Number(l.lineTotal).toFixed(2)}</td></tr>`)
       .join('');
     const discount = parseFloat(o.discountAmount || 0);
-  const customerNames = o.customers?.map(c => c.name).join(', ') || o.customer?.name || '';
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${o.orderNumber}</title>
+    const paymentRows = (o.payments || [])
+      .map(p => `<tr><td style="font-size:11px;color:#555">Paid via ${p.paymentMethod} ${p.paymentReference ? `(${p.paymentReference})` : ''}</td><td class="amt" style="font-size:11px;color:#555">Rs.${Number(p.amount).toFixed(2)}</td></tr>`)
+      .join('');
+    const customerNames = o.customers?.map(c => c.name).join(', ') || o.customer?.name || '';
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${o.orderNumber}</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   body{font-family:'Courier New',monospace;font-size:13px;color:#000;background:#fff;width:300px;padding:16px}
@@ -79,6 +82,7 @@ function ReceiptModal({ order, onClose, onNewOrder }) {
   ${discount > 0 ? `<div class="row"><span>Discount</span><span>-Rs.${discount.toFixed(2)}</span></div>` : ''}
   <div class="row"><span>Tax (5%)</span><span>Rs.${Number(o.taxAmount||0).toFixed(2)}</span></div>
   <div class="total-row"><span>TOTAL</span><span>Rs.${Number(o.total||0).toFixed(2)}</span></div>
+  ${paymentRows ? `<table>${paymentRows}</table>` : ''}
   <div class="footer">Thank you! Visit again 🙏</div>
 </body></html>`;
 
@@ -161,6 +165,17 @@ function ReceiptModal({ order, onClose, onNewOrder }) {
         <div className="flex justify-between text-violet-600 font-bold text-base mt-2">
           <span>TOTAL</span><span>{fmt(order.total)}</span>
         </div>
+        {order.payments && order.payments.length > 0 && (
+          <div className="mt-3 space-y-1 pt-2 border-t border-slate-100 text-xs text-slate-550 font-jakarta">
+            <div className="font-bold text-slate-700">Payment Breakdown:</div>
+            {order.payments.map((p, idx) => (
+              <div key={idx} className="flex justify-between">
+                <span>{p.paymentMethod} {p.paymentReference ? `(${p.paymentReference})` : ''}</span>
+                <span className="font-bold text-slate-800">{fmt(p.amount)}</span>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="text-center text-slate-400 text-xs mt-4">Thank you! Visit again 🙏</div>
       </div>
 
@@ -377,6 +392,117 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
   const [kitchenLoading, setKitchenLoading] = useState(false);
   const saveTimerRef = useRef(null);
   const loadedOrderIdRef = useRef(null);
+
+  /* ── Split Payment state ── */
+  const [isSplit, setIsSplit] = useState(false);
+  const [splitMode, setSplitMode] = useState('equal'); // 'equal' | 'item'
+  const [equalCount, setEqualCount] = useState(2);
+  const [paidSplits, setPaidSplits] = useState([]);
+  const [activeSplitIdx, setActiveSplitIdx] = useState(null);
+  const [itemAssignments, setItemAssignments] = useState({});
+
+  useEffect(() => {
+    if (!showPayment) {
+      setIsSplit(false);
+      setSplitMode('equal');
+      setEqualCount(2);
+      setPaidSplits([]);
+      setActiveSplitIdx(null);
+      setItemAssignments({});
+    }
+  }, [showPayment]);
+
+  const getEqualSplits = () => {
+    const share = Math.floor((total / equalCount) * 100) / 100;
+    const parts = [];
+    let allocated = 0;
+    for (let i = 0; i < equalCount; i++) {
+      const amt = i === equalCount - 1 ? total - allocated : share;
+      allocated += amt;
+      parts.push({
+        index: i,
+        amount: amt,
+        paid: paidSplits[i] ? true : false,
+        method: paidSplits[i]?.method,
+        reference: paidSplits[i]?.reference
+      });
+    }
+    return parts;
+  };
+
+  const numGuests = Math.max(2, customers.length);
+  const getGuestName = (idx) => {
+    if (customers[idx]) return customers[idx].name;
+    return `Guest ${idx + 1}`;
+  };
+
+  const getAssignedGuest = (itemIdx) => {
+    return itemAssignments[itemIdx] ?? 0;
+  };
+
+  const getItemSplits = () => {
+    const parts = Array.from({ length: numGuests }, (_, g) => ({
+      index: g,
+      name: getGuestName(g),
+      subtotal: 0,
+      discount: 0,
+      tax: 0,
+      total: 0
+    }));
+
+    cartItems.forEach((item, itemIdx) => {
+      const guestIdx = getAssignedGuest(itemIdx);
+      parts[guestIdx].subtotal += item.price * item.quantity;
+    });
+
+    let allocatedTotal = 0;
+    parts.forEach((part, g) => {
+      if (subtotal > 0) {
+        const ratio = part.subtotal / subtotal;
+        part.discount = totalDiscount * ratio;
+        const afterDiscount = Math.max(part.subtotal - part.discount, 0);
+        part.tax = afterDiscount * 0.05;
+        part.total = Math.round((afterDiscount + part.tax) * 100) / 100;
+      }
+      
+      if (g === numGuests - 1) {
+        part.total = Math.max(0, Math.round((total - allocatedTotal) * 100) / 100);
+      } else {
+        allocatedTotal += part.total;
+      }
+
+      part.paid = paidSplits[g] ? true : false;
+      part.method = paidSplits[g]?.method;
+      part.reference = paidSplits[g]?.reference;
+    });
+
+    return parts;
+  };
+
+  const confirmSplitPayment = (method, reference) => {
+    const amt = splitMode === 'equal' ? getEqualSplits()[activeSplitIdx].amount : getItemSplits()[activeSplitIdx].total;
+    setPaidSplits(prev => {
+      const next = [...prev];
+      next[activeSplitIdx] = { amount: amt, method, reference };
+      return next;
+    });
+    setActiveSplitIdx(null);
+  };
+
+  const resetSplitPayment = (idx) => {
+    setPaidSplits(prev => {
+      const next = [...prev];
+      next[idx] = null;
+      return next;
+    });
+  };
+
+  const isSplitFullyPaid = () => {
+    const parts = splitMode === 'equal' ? getEqualSplits() : getItemSplits();
+    return parts.every(p => p.paid || p.amount === 0 || p.total === 0);
+  };
+
+
 
   /* ── load master data ── */
   useEffect(() => {
@@ -695,8 +821,9 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
         onOrderUpdate?.(order);
       }
       const paid = await api.put(`/orders/${order.id}/pay`, {
-        paymentMethod: payMethod,
-        paymentReference: payMethod === 'CARD' ? cardRef : null,
+        paymentMethod: isSplit ? 'SPLIT' : payMethod,
+        paymentReference: isSplit ? 'Split Billing' : (payMethod === 'CARD' ? cardRef : null),
+        payments: isSplit ? paidSplits.filter(Boolean) : null
       });
       setCurrentOrder(paid);
       onOrderUpdate?.(paid);
@@ -1184,81 +1311,327 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-4 pb-2 space-y-2 pt-3">
-              <div className="text-xs font-black uppercase tracking-wider mb-3" style={{ color: MUTED, fontFamily: FONT_H }}>Payment Method</div>
-              {paymentMethods.map(m => (
-                <button key={m.id} onClick={() => setPayMethod(m.name)}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 border-2"
-                  style={payMethod === m.name
-                    ? { borderColor: ACCENT, background: `${ACCENT}12`, boxShadow: `3px 3px 0px 0px ${FG}` }
-                    : { borderColor: BORDER, background: WHITE }}>
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center border-2" style={{ background: payMethod === m.name ? ACCENT : '#F8FAFC', borderColor: payMethod === m.name ? FG : BORDER }}>
-                    {m.name === 'CASH' ? <Wallet size={16} strokeWidth={2.5} color={payMethod === m.name ? '#fff' : MUTED} /> : m.name === 'CARD' ? <CreditCard size={16} strokeWidth={2.5} color={payMethod === m.name ? '#fff' : MUTED} /> : <Smartphone size={16} strokeWidth={2.5} color={payMethod === m.name ? '#fff' : MUTED} />}
-                  </div>
-                  <span className="font-bold" style={{ color: FG, fontFamily: FONT_H }}>
-                    {m.name === 'UPI' ? 'UPI / Scan to Pay' : m.name === 'CASH' ? 'Cash' : 'Card / Digital'}
-                  </span>
-                  {payMethod === m.name && <Check size={18} strokeWidth={3} className="ml-auto" style={{ color: ACCENT }} />}
-                </button>
-              ))}
+            {/* Split billing header toggle */}
+            <div className="px-4 py-2.5 shrink-0 border-b-2 border-slate-100 flex gap-2" style={{ background: '#FFFDF5' }}>
+              <button
+                type="button"
+                onClick={() => setIsSplit(false)}
+                className={`flex-1 py-2 rounded-xl text-xs font-black border-2 transition ${!isSplit ? 'bg-violet-600 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200'}`}
+                style={{ boxShadow: !isSplit ? 'var(--pop-shadow-sm)' : 'none', fontFamily: FONT_H }}
+              >
+                Full Bill
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsSplit(true)}
+                className={`flex-1 py-2 rounded-xl text-xs font-black border-2 transition ${isSplit ? 'bg-violet-600 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200'}`}
+                style={{ boxShadow: isSplit ? 'var(--pop-shadow-sm)' : 'none', fontFamily: FONT_H }}
+              >
+                Split Bill
+              </button>
+            </div>
 
-              {payMethod === 'CASH' && (
-                <div className="rounded-xl p-3 space-y-2 border-2" style={{ background: WHITE, borderColor: BORDER }}>
-                  <label className="block text-xs font-black uppercase tracking-wide" style={{ color: MUTED, fontFamily: FONT_H }}>Cash Received (₹)</label>
-                  <input type="number" step="0.01" value={cashReceived} onChange={e => setCashReceived(e.target.value)}
-                    placeholder={total.toFixed(2)}
-                    className="w-full rounded-xl px-3 py-2.5 text-lg font-mono font-bold focus:outline-none border-2 transition"
-                    style={{ background: '#F8FAFC', borderColor: BORDER, color: FG }}
-                    onFocus={e => { e.target.style.borderColor = ACCENT; e.target.style.boxShadow = `4px 4px 0px 0px ${ACCENT}`; }}
-                    onBlur={e => { e.target.style.borderColor = BORDER; e.target.style.boxShadow = 'none'; }} />
-                  {cashChange !== null && cashChange >= 0 && (
-                    <div className="flex justify-between rounded-xl px-3 py-2 border-2"
-                      style={{ background: `${EMERALD}15`, borderColor: `${EMERALD}60` }}>
-                      <span className="text-sm font-bold" style={{ color: '#059669' }}>Change to Return</span>
-                      <span className="font-black" style={{ color: '#059669' }}>{fmt(cashChange)}</span>
+            <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3 pt-3">
+              {!isSplit ? (
+                <>
+                  <div className="text-xs font-black uppercase tracking-wider mb-2" style={{ color: MUTED, fontFamily: FONT_H }}>Payment Method</div>
+                  {paymentMethods.map(m => (
+                    <button key={m.id} onClick={() => setPayMethod(m.name)}
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 border-2"
+                      style={payMethod === m.name
+                        ? { borderColor: ACCENT, background: `${ACCENT}12`, boxShadow: `3px 3px 0px 0px ${FG}` }
+                        : { borderColor: BORDER, background: WHITE }}>
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center border-2" style={{ background: payMethod === m.name ? ACCENT : '#F8FAFC', borderColor: payMethod === m.name ? FG : BORDER }}>
+                        {m.name === 'CASH' ? <Wallet size={16} strokeWidth={2.5} color={payMethod === m.name ? '#fff' : MUTED} /> : m.name === 'CARD' ? <CreditCard size={16} strokeWidth={2.5} color={payMethod === m.name ? '#fff' : MUTED} /> : <Smartphone size={16} strokeWidth={2.5} color={payMethod === m.name ? '#fff' : MUTED} />}
+                      </div>
+                      <span className="font-bold" style={{ color: FG, fontFamily: FONT_H }}>
+                        {m.name === 'UPI' ? 'UPI / Scan to Pay' : m.name === 'CASH' ? 'Cash' : 'Card / Digital'}
+                      </span>
+                      {payMethod === m.name && <Check size={18} strokeWidth={3} className="ml-auto" style={{ color: ACCENT }} />}
+                    </button>
+                  ))}
+
+                  {payMethod === 'CASH' && (
+                    <div className="rounded-xl p-3 space-y-2 border-2" style={{ background: WHITE, borderColor: BORDER }}>
+                      <label className="block text-xs font-black uppercase tracking-wide" style={{ color: MUTED, fontFamily: FONT_H }}>Cash Received (₹)</label>
+                      <input type="number" step="0.01" value={cashReceived} onChange={e => setCashReceived(e.target.value)}
+                        placeholder={total.toFixed(2)}
+                        className="w-full rounded-xl px-3 py-2.5 text-lg font-mono font-bold focus:outline-none border-2 transition"
+                        style={{ background: '#F8FAFC', borderColor: BORDER, color: FG }}
+                        onFocus={e => { e.target.style.borderColor = ACCENT; e.target.style.boxShadow = `4px 4px 0px 0px ${ACCENT}`; }}
+                        onBlur={e => { e.target.style.borderColor = BORDER; e.target.style.boxShadow = 'none'; }} />
+                      {cashChange !== null && cashChange >= 0 && (
+                        <div className="flex justify-between rounded-xl px-3 py-2 border-2"
+                          style={{ background: `${EMERALD}15`, borderColor: `${EMERALD}60` }}>
+                          <span className="text-sm font-bold" style={{ color: '#059669' }}>Change to Return</span>
+                          <span className="font-black" style={{ color: '#059669' }}>{fmt(cashChange)}</span>
+                        </div>
+                      )}
                     </div>
                   )}
-                </div>
-              )}
 
-              {payMethod === 'CARD' && (
-                <div className="rounded-xl p-3 border-2" style={{ background: WHITE, borderColor: BORDER }}>
-                  <label className="block text-xs font-black uppercase tracking-wide mb-2" style={{ color: MUTED, fontFamily: FONT_H }}>Transaction Reference (optional)</label>
-                  <input value={cardRef} onChange={e => setCardRef(e.target.value)} placeholder="e.g. TXN-1234567"
-                    className="w-full rounded-xl px-3 py-2.5 focus:outline-none border-2 transition font-mono"
-                    style={{ background: '#F8FAFC', borderColor: BORDER, color: FG }}
-                    onFocus={e => { e.target.style.borderColor = ACCENT; e.target.style.boxShadow = `4px 4px 0px 0px ${ACCENT}`; }}
-                    onBlur={e => { e.target.style.borderColor = BORDER; e.target.style.boxShadow = 'none'; }} />
-                </div>
-              )}
+                  {payMethod === 'CARD' && (
+                    <div className="rounded-xl p-3 border-2" style={{ background: WHITE, borderColor: BORDER }}>
+                      <label className="block text-xs font-black uppercase tracking-wide mb-2" style={{ color: MUTED, fontFamily: FONT_H }}>Transaction Reference (optional)</label>
+                      <input value={cardRef} onChange={e => setCardRef(e.target.value)} placeholder="e.g. TXN-1234567"
+                        className="w-full rounded-xl px-3 py-2.5 focus:outline-none border-2 transition font-mono"
+                        style={{ background: '#F8FAFC', borderColor: BORDER, color: FG }}
+                        onFocus={e => { e.target.style.borderColor = ACCENT; e.target.style.boxShadow = `4px 4px 0px 0px ${ACCENT}`; }}
+                        onBlur={e => { e.target.style.borderColor = BORDER; e.target.style.boxShadow = 'none'; }} />
+                    </div>
+                  )}
 
-              {payMethod === 'UPI' && upiMethod?.upiId && (
-                <div className="rounded-xl p-4 flex flex-col items-center gap-3 border-2" style={{ background: WHITE, borderColor: BORDER }}>
-                  <div className="text-sm font-semibold" style={{ color: MUTED }}>Scan to pay {fmt(total)}</div>
-                  <div className="bg-white p-2 rounded-xl border-2" style={{ borderColor: BORDER }}>
-                    <QRCodeSVG value={`upi://pay?pa=${upiMethod.upiId}&am=${total.toFixed(2)}&cu=INR&tn=CafePOS`} size={130} />
+                  {payMethod === 'UPI' && upiMethod?.upiId && (
+                    <div className="rounded-xl p-4 flex flex-col items-center gap-3 border-2" style={{ background: WHITE, borderColor: BORDER }}>
+                      <div className="text-sm font-semibold" style={{ color: MUTED }}>Scan to pay {fmt(total)}</div>
+                      <div className="bg-white p-2 rounded-xl border-2" style={{ borderColor: BORDER }}>
+                        <QRCodeSVG value={`upi://pay?pa=${upiMethod.upiId}&am=${total.toFixed(2)}&cu=INR&tn=CafePOS`} size={130} />
+                      </div>
+                      <div className="text-xs font-semibold" style={{ color: MUTED }}>UPI ID: {upiMethod.upiId}</div>
+                    </div>
+                  )}
+                  {payMethod === 'UPI' && !upiMethod?.upiId && (
+                    <div className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs border-2" style={{ background: '#FFFBEB', borderColor: '#FDE68A', color: '#92400E' }}>
+                      <AlertTriangle size={13} className="shrink-0" />
+                      No UPI ID configured. Go to Backend → Payment Methods.
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="flex gap-2 p-1 bg-slate-100 border-2 border-slate-800 rounded-xl mb-3">
+                    <button
+                      type="button"
+                      onClick={() => { setSplitMode('equal'); setPaidSplits([]); setActiveSplitIdx(null); }}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-black transition ${splitMode === 'equal' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:text-slate-800'}`}
+                      style={{ fontFamily: FONT_H }}
+                    >
+                      Equal Parts
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setSplitMode('item'); setPaidSplits([]); setActiveSplitIdx(null); }}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-black transition ${splitMode === 'item' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:text-slate-800'}`}
+                      style={{ fontFamily: FONT_H }}
+                    >
+                      Split by Items
+                    </button>
                   </div>
-                  <div className="text-xs font-semibold" style={{ color: MUTED }}>UPI ID: {upiMethod.upiId}</div>
-                </div>
-              )}
-              {payMethod === 'UPI' && !upiMethod?.upiId && (
-                <div className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs border-2" style={{ background: '#FFFBEB', borderColor: '#FDE68A', color: '#92400E' }}>
-                  <AlertTriangle size={13} className="shrink-0" />
-                  No UPI ID configured. Go to Backend → Payment Methods.
-                </div>
+
+                  {splitMode === 'equal' ? (
+                    <div className="flex items-center justify-between p-3 bg-white border-2 border-slate-850 rounded-2xl mb-4" style={{ boxShadow: 'var(--pop-shadow-sm)' }}>
+                      <span className="text-xs font-bold text-slate-700">Number of Guests</span>
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={() => { setEqualCount(c => Math.max(2, c - 1)); setPaidSplits([]); setActiveSplitIdx(null); }} className="w-8 h-8 rounded-lg border-2 border-slate-800 flex items-center justify-center font-black">-</button>
+                        <span className="w-8 text-center font-black text-sm">{equalCount}</span>
+                        <button type="button" onClick={() => { setEqualCount(c => Math.min(10, c + 1)); setPaidSplits([]); setActiveSplitIdx(null); }} className="w-8 h-8 rounded-lg border-2 border-slate-800 bg-slate-800 text-white flex items-center justify-center font-black">+</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 mb-4">
+                      <div className="text-xs font-bold text-slate-500 mb-1">Assign Items to Guests:</div>
+                      {cartItems.map((item, itemIdx) => {
+                        const guestIdx = getAssignedGuest(itemIdx);
+                        return (
+                          <div key={itemIdx} className="flex items-center justify-between p-2.5 bg-white border-2 border-slate-200 rounded-xl text-xs" style={{ boxShadow: 'var(--pop-shadow-sm)' }}>
+                            <div className="truncate pr-2 font-medium text-slate-800">
+                              {item.name} <span className="text-slate-400">× {item.quantity}</span>
+                            </div>
+                            <select
+                              value={guestIdx}
+                              onChange={e => {
+                                setItemAssignments(prev => ({ ...prev, [itemIdx]: parseInt(e.target.value) }));
+                                setPaidSplits([]);
+                                setActiveSplitIdx(null);
+                              }}
+                              className="bg-slate-50 border-2 border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:border-slate-800 font-semibold text-slate-700"
+                            >
+                              {Array.from({ length: numGuests }).map((_, g) => (
+                                <option key={g} value={g}>{getGuestName(g)}</option>
+                              ))}
+                            </select>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Split parts list */}
+                  <div className="space-y-2.5">
+                    {(splitMode === 'equal' ? getEqualSplits() : getItemSplits()).map(part => {
+                      const amt = splitMode === 'equal' ? part.amount : part.total;
+                      if (amt === 0) return null;
+                      return (
+                        <div key={part.index} className="border-2 border-slate-800 rounded-2xl p-3 bg-white flex items-center justify-between" style={{ boxShadow: 'var(--pop-shadow-sm)' }}>
+                          <div>
+                            <div className="text-xs font-black uppercase tracking-wider text-slate-400" style={{ fontFamily: FONT_H }}>
+                              {splitMode === 'equal' ? `Guest ${part.index + 1}` : part.name}
+                            </div>
+                            <div className="text-lg font-black text-slate-800 mt-0.5">{fmt(amt)}</div>
+                          </div>
+                          <div>
+                            {part.paid ? (
+                              <div className="flex items-center gap-2">
+                                <span className="px-2.5 py-1 bg-[#D1FAE5] text-emerald-800 border-2 border-emerald-300 rounded-lg text-[10px] font-black uppercase flex items-center gap-1">
+                                  <Check size={11} strokeWidth={3} /> {part.method}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => resetSplitPayment(part.index)}
+                                  className="w-7 h-7 flex items-center justify-center rounded-lg border-2 border-slate-200 text-rose-500 hover:border-slate-800 transition"
+                                  title="Reset Payment"
+                                >
+                                  <X size={13} strokeWidth={2.5} />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveSplitIdx(part.index);
+                                  setPayMethod(null);
+                                  setCashReceived('');
+                                  setCardRef('');
+                                }}
+                                className="px-3 py-1.5 bg-violet-600 text-white border-2 border-slate-800 rounded-xl text-xs font-black hover:bg-violet-700 transition"
+                                style={{ boxShadow: '2px 2px 0px 0px #1E293B', fontFamily: FONT_H }}
+                              >
+                                Pay Share
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Active split sub-modal */}
+                  {activeSplitIdx !== null && (
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-55 flex items-center justify-center p-4">
+                      <div className="bg-white border-2 border-slate-800 rounded-2xl w-full max-w-sm p-5 space-y-4" style={{ boxShadow: 'var(--pop-shadow-lg)' }}>
+                        <div className="flex justify-between items-center pb-2 border-b-2">
+                          <div>
+                            <div className="text-[10px] font-black uppercase tracking-wider text-slate-400" style={{ fontFamily: FONT_H }}>Collect Share Payment</div>
+                            <div className="text-base font-black text-slate-850" style={{ fontFamily: FONT_H }}>
+                              {splitMode === 'equal' ? `Guest ${activeSplitIdx + 1}` : getGuestName(activeSplitIdx)}
+                            </div>
+                          </div>
+                          <div className="text-xl font-black text-violet-600">
+                            {fmt(splitMode === 'equal' ? getEqualSplits()[activeSplitIdx].amount : getItemSplits()[activeSplitIdx].total)}
+                          </div>
+                        </div>
+
+                        <div className="text-xs font-black uppercase tracking-wider text-slate-500 mb-1" style={{ fontFamily: FONT_H }}>Select Method</div>
+                        <div className="grid grid-cols-3 gap-2">
+                          {['CASH', 'CARD', 'UPI'].map(m => (
+                            <button
+                              key={m}
+                              type="button"
+                              onClick={() => setPayMethod(m)}
+                              className={`py-2 rounded-xl text-xs font-black border-2 transition ${payMethod === m ? 'bg-violet-600 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200'}`}
+                              style={{ boxShadow: payMethod === m ? 'var(--pop-shadow-sm)' : 'none', fontFamily: FONT_H }}
+                            >
+                              {m === 'CASH' ? 'Cash' : m === 'CARD' ? 'Card' : 'UPI'}
+                            </button>
+                          ))}
+                        </div>
+
+                        {payMethod === 'CASH' && (
+                          <div className="space-y-1.5">
+                            <label className="block text-[10px] font-black uppercase tracking-wide text-slate-400" style={{ fontFamily: FONT_H }}>Cash Received (₹)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              placeholder={(splitMode === 'equal' ? getEqualSplits()[activeSplitIdx].amount : getItemSplits()[activeSplitIdx].total).toFixed(2)}
+                              onChange={e => setCashReceived(e.target.value)}
+                              className="w-full rounded-xl px-3 py-2 text-sm font-bold focus:outline-none border-2 transition bg-slate-50 border-slate-200 font-mono"
+                            />
+                            {cashReceived && (
+                              <div className="flex justify-between text-xs font-bold text-emerald-600 bg-[#D1FAE5] px-2.5 py-1.5 rounded-lg border-2 border-emerald-350">
+                                <span>Change to Return</span>
+                                <span>{fmt(Math.max(0, parseFloat(cashReceived) - (splitMode === 'equal' ? getEqualSplits()[activeSplitIdx].amount : getItemSplits()[activeSplitIdx].total)))}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {payMethod === 'CARD' && (
+                          <div className="space-y-1.5">
+                            <label className="block text-[10px] font-black uppercase tracking-wide text-slate-400" style={{ fontFamily: FONT_H }}>Transaction Reference</label>
+                            <input
+                              placeholder="e.g. TXN-123456"
+                              value={cardRef}
+                              onChange={e => setCardRef(e.target.value)}
+                              className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none border-2 transition bg-slate-50 border-slate-200 font-mono"
+                            />
+                          </div>
+                        )}
+
+                        {payMethod === 'UPI' && upiMethod?.upiId && (
+                          <div className="flex flex-col items-center gap-2 p-3 bg-slate-50 border-2 rounded-xl">
+                            <div className="text-[10px] font-semibold text-slate-500">Scan to Pay Share</div>
+                            <div className="bg-white p-1 rounded-lg border">
+                              <QRCodeSVG
+                                value={`upi://pay?pa=${upiMethod.upiId}&am=${(splitMode === 'equal' ? getEqualSplits()[activeSplitIdx].amount : getItemSplits()[activeSplitIdx].total).toFixed(2)}&cu=INR&tn=CafePOS-Share`}
+                                size={90}
+                              />
+                            </div>
+                            <div className="text-[9px] font-semibold text-slate-400 truncate max-w-[200px]">{upiMethod.upiId}</div>
+                          </div>
+                        )}
+
+                        <div className="flex gap-3 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => { setActiveSplitIdx(null); setPayMethod(null); setCashReceived(''); setCardRef(''); }}
+                            className="flex-1 py-2 bg-white hover:bg-slate-50 text-slate-800 border-2 border-slate-800 rounded-xl font-bold transition text-xs shadow-pop-sm"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!payMethod}
+                            onClick={() => {
+                              confirmSplitPayment(payMethod, payMethod === 'CARD' ? cardRef : payMethod === 'CASH' ? `Cash Change: ${cashReceived ? Math.max(0, parseFloat(cashReceived) - (splitMode === 'equal' ? getEqualSplits()[activeSplitIdx].amount : getItemSplits()[activeSplitIdx].total)) : '0'}` : 'UPI Scan');
+                              setPayMethod(null);
+                              setCashReceived('');
+                              setCardRef('');
+                            }}
+                            className="flex-1 py-2 bg-violet-600 text-white border-2 border-slate-800 rounded-xl font-black transition text-xs shadow-pop-sm disabled:opacity-50"
+                          >
+                            Confirm Pay
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
+            {/* Checkout Action Button */}
             <div className="px-4 pb-4 shrink-0">
-              <button onClick={handlePay} disabled={payLoading || !payMethod}
-                className="w-full h-14 rounded-xl font-black text-base transition-all duration-200 disabled:opacity-40 flex items-center justify-center gap-2 border-2"
-                style={{ background: ACCENT, color: '#fff', borderColor: FG, boxShadow: `4px 4px 0px 0px ${FG}`, fontFamily: FONT_H }}>
-                {payLoading ? (
-                  <><Loader2 size={18} className="animate-spin" /><span>Processing…</span></>
-                ) : (
-                  <><CheckCircle2 size={18} strokeWidth={2.5} /><span>Complete Payment · {fmt(total)}</span></>
-                )}
-              </button>
+              {isSplit ? (
+                <button onClick={handlePay} disabled={payLoading || !isSplitFullyPaid()}
+                  className="w-full h-14 rounded-xl font-black text-base transition-all duration-200 disabled:opacity-40 flex items-center justify-center gap-2 border-2"
+                  style={{ background: ACCENT, color: '#fff', borderColor: FG, boxShadow: `4px 4px 0px 0px ${FG}`, fontFamily: FONT_H }}>
+                  {payLoading ? (
+                    <><Loader2 size={18} className="animate-spin" /><span>Processing…</span></>
+                  ) : (
+                    <><CheckCircle2 size={18} strokeWidth={2.5} /><span>Complete Split Payment · {fmt(total)}</span></>
+                  )}
+                </button>
+              ) : (
+                <button onClick={handlePay} disabled={payLoading || !payMethod}
+                  className="w-full h-14 rounded-xl font-black text-base transition-all duration-200 disabled:opacity-40 flex items-center justify-center gap-2 border-2"
+                  style={{ background: ACCENT, color: '#fff', borderColor: FG, boxShadow: `4px 4px 0px 0px ${FG}`, fontFamily: FONT_H }}>
+                  {payLoading ? (
+                    <><Loader2 size={18} className="animate-spin" /><span>Processing…</span></>
+                  ) : (
+                    <><CheckCircle2 size={18} strokeWidth={2.5} /><span>Complete Payment · {fmt(total)}</span></>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         )}

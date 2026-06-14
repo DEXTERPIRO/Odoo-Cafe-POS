@@ -60,7 +60,20 @@ export default function PosTerminal() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [currentView, setCurrentView] = useState('welcome');
+  // Restore last active tab from sessionStorage on refresh
+  const [currentView, setCurrentView] = useState(
+    () => sessionStorage.getItem('pos-active-tab') || 'welcome'
+  );
+
+  // Wrapper that persists the tab before setting state
+  const setView = (view) => {
+    if (view === 'welcome') {
+      sessionStorage.removeItem('pos-active-tab');
+    } else {
+      sessionStorage.setItem('pos-active-tab', view);
+    }
+    setCurrentView(view);
+  };
   const [selectedTable, setSelectedTable] = useState(null);
   const [currentOrder, setCurrentOrder] = useState(null);
   const [showFloorPopup, setShowFloorPopup] = useState(false);
@@ -108,7 +121,7 @@ export default function PosTerminal() {
       const { loadOrder } = location.state;
       setCurrentOrder(loadOrder);
       setSelectedTable(loadOrder.table);
-      setCurrentView('order');
+      setCurrentView('order');   // intentionally raw — 'order' tab without a specific item doesn't make sense to persist
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
@@ -122,13 +135,14 @@ export default function PosTerminal() {
 
   const handleTableSelect = (table, existingOrder = null) => {
     setSelectedTable(table); setCurrentOrder(existingOrder);
-    setShowFloorPopup(false); setCurrentView('order');
+    setShowFloorPopup(false); setView('order');
   };
   const handleNoTable = () => {
     setSelectedTable(null); setCurrentOrder(null);
-    setShowFloorPopup(false); setCurrentView('order');
+    setShowFloorPopup(false); setView('order');
   };
   const handleLogout = async () => {
+    sessionStorage.removeItem('pos-active-tab');
     try { await api.post('/auth/logout'); } catch {}
     logout(); navigate('/login'); toast.success('Logged out');
   };
@@ -145,6 +159,7 @@ export default function PosTerminal() {
       const summary = await api.get('/reports/dashboard?period=today');
       setClosedSession(session); setClosingSummary(summary);
       setSession(null); setShowCloseConfirm(false); setShowSummaryModal(true);
+      sessionStorage.removeItem('pos-active-tab');
       toast.success('Session closed');
     } catch (err) { toast.error(err.error || 'Failed to close session'); }
     finally { setCloseLoading(false); }
@@ -170,7 +185,7 @@ export default function PosTerminal() {
     if (tabId === 'kitchen') {
       navigate('/kitchen');
     } else {
-      setCurrentView(tabId);
+      setView(tabId);
     }
     setMenuOpen(false);
   };
@@ -198,7 +213,7 @@ export default function PosTerminal() {
         style={{ background: '#FFFFFF', borderBottom: `2px solid ${BORDER}`, boxShadow: '0 2px 0px 0px #E2E8F0' }}
       >
         <button
-          onClick={() => setCurrentView('welcome')}
+          onClick={() => setView('welcome')}
           className="flex items-center gap-2.5 shrink-0 mr-3 hover:opacity-80 transition text-left"
         >
           <div className="w-9 h-9 rounded-xl flex items-center justify-center border-2 border-[#1E293B]"
@@ -484,14 +499,14 @@ export default function PosTerminal() {
               {[
                 {
                   label: "Today's Orders",
-                  value: dashStats?.ordersCount ?? '—',
+                  value: dashStats?.totalOrders ?? dashStats?.ordersCount ?? '—',
                   icon: Package,
                   color: ACCENT,
                   bg: '#EDE9FE',
                 },
                 {
                   label: "Today's Revenue",
-                  value: dashStats?.totalRevenue != null ? `₹${Number(dashStats.totalRevenue).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—',
+                  value: (dashStats?.revenue ?? dashStats?.totalRevenue) != null ? `₹${Number(dashStats.revenue ?? dashStats.totalRevenue).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—',
                   icon: IndianRupee,
                   color: '#059669',
                   bg: '#D1FAE5',
@@ -541,7 +556,7 @@ export default function PosTerminal() {
 
                   {/* Dine-In */}
                   <button
-                    onClick={() => setCurrentView('table-view')}
+                    onClick={() => setView('table-view')}
                     className="relative overflow-hidden rounded-2xl p-6 text-left group transition-all duration-200 hover:rotate-[-0.5deg] hover:scale-[1.01] active:translate-x-[2px] active:translate-y-[2px] border-2 border-[#1E293B]"
                     style={{
                       background: 'var(--brand-accent)',
@@ -606,8 +621,8 @@ export default function PosTerminal() {
                 {/* 3 utility cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[
-                    { label: 'Active Orders', sub: 'View & complete orders', Icon: ClipboardList, color: '#DB2777', bg: '#FDF2F8', onClick: () => setCurrentView('orders-list') },
-                    { label: 'Customers', sub: 'Profiles & loyalty', Icon: UserCircle, color: '#2563EB', bg: '#EFF6FF', onClick: () => setCurrentView('customers') },
+                    { label: 'Active Orders', sub: 'View & complete orders', Icon: ClipboardList, color: '#DB2777', bg: '#FDF2F8', onClick: () => setView('orders-list') },
+                    { label: 'Customers', sub: 'Profiles & loyalty', Icon: UserCircle, color: '#2563EB', bg: '#EFF6FF', onClick: () => setView('customers') },
                     { label: 'Kitchen KDS', sub: 'Cook tickets & queue', Icon: ChefHat, color: '#EA580C', bg: '#FFF7ED', onClick: () => navigate('/kitchen') },
                   ].map(({ label, sub, Icon, color, bg, onClick }) => (
                     <button
@@ -653,8 +668,8 @@ export default function PosTerminal() {
                       { label: 'Operator', value: user?.name || '—' },
                       { label: 'Opened At', value: session?.openedAt ? new Date(session.openedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—' },
                       { label: 'Duration', value: sessionTimer || '—' },
-                      { label: 'Orders Today', value: dashStats?.ordersCount ?? '—' },
-                      { label: 'Revenue Today', value: dashStats?.totalRevenue != null ? `₹${Number(dashStats.totalRevenue).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—' },
+                      { label: 'Orders Today', value: dashStats?.totalOrders ?? dashStats?.ordersCount ?? '—' },
+                      { label: 'Revenue Today', value: (dashStats?.revenue ?? dashStats?.totalRevenue) != null ? `₹${Number(dashStats.revenue ?? dashStats.totalRevenue).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—' },
                     ].map(({ label, value }) => (
                       <div key={label} className="flex items-center justify-between pb-1.5 border-b border-slate-100 last:border-0 last:pb-0">
                         <span className="text-xs font-semibold font-jakarta" style={{ color: '#94A3B8' }}>{label}</span>

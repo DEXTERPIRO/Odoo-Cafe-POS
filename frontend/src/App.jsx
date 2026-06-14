@@ -16,22 +16,61 @@ import PosTerminal from './pages/pos/PosTerminal';
 import KitchenDisplay from './pages/kitchen/KitchenDisplay';
 
 
+/* ── Splash shown while localStorage is being read ───────── */
+function HydrationSplash() {
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#FFFDF5',
+      }}
+    >
+      <div
+        style={{
+          width: 48,
+          height: 48,
+          borderRadius: 14,
+          background: '#8B5CF6',
+          border: '2px solid #1E293B',
+          boxShadow: '4px 4px 0px 0px #1E293B',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 22,
+        }}
+      >
+        ☕
+      </div>
+    </div>
+  );
+}
+
+/* ── Guards ────────────────────────────────────────────────── */
+
+// Requires user to be logged in as ADMIN
 function AdminGuard({ children }) {
-  const { user } = useAuthStore();
+  const { user, _hydrated } = useAuthStore();
+  if (!_hydrated) return <HydrationSplash />;
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== 'ADMIN') return <Navigate to="/pos" replace />;
   return children;
 }
 
+// Requires user to be logged in (any role)
 function AuthGuard({ children }) {
-  const { user } = useAuthStore();
+  const { user, _hydrated } = useAuthStore();
+  if (!_hydrated) return <HydrationSplash />;
   if (!user) return <Navigate to="/login" replace />;
   return children;
 }
 
 // Prevents logged-in users from seeing /login or /signup
 function GuestGuard({ children }) {
-  const { user } = useAuthStore();
+  const { user, _hydrated } = useAuthStore();
+  if (!_hydrated) return <HydrationSplash />;
   if (user) {
     if (user.role === 'ADMIN') return <Navigate to="/backend" replace />;
     return <Navigate to="/pos" replace />;

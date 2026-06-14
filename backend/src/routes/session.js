@@ -61,11 +61,15 @@ router.post('/close', verifyToken, requireEmployee, async (req, res) => {
     const totalRevenue = paidOrders.reduce((s, o) => s + parseFloat(o.total || 0), 0);
     const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
-    /* Payment breakdown */
+    /* Payment breakdown from individual payments */
+    const payments = await prisma.payment.findMany({
+      where: { order: { sessionId: session.id } }
+    });
+
     const paymentBreakdown = { CASH: 0, CARD: 0, UPI: 0 };
-    paidOrders.forEach(o => {
-      const m = (o.paymentMethod || '').toUpperCase();
-      if (paymentBreakdown[m] !== undefined) paymentBreakdown[m] += parseFloat(o.total || 0);
+    payments.forEach(p => {
+      const m = (p.paymentMethod || '').toUpperCase();
+      if (paymentBreakdown[m] !== undefined) paymentBreakdown[m] += parseFloat(p.amount || 0);
     });
 
     /* Order status breakdown */

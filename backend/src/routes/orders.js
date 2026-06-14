@@ -37,7 +37,7 @@ router.get('/', verifyToken, requireEmployee, async (req, res) => {
     if (sessionId) where.sessionId = sessionId;
     if (status) where.status = status;
     const orders = await prisma.order.findMany({
-      where, include: { lines: { include: { product: true } }, customers: true, table: true, kdsTicket: true, createdBy: { select: { name: true } } },
+      where, include: { lines: { include: { product: true } }, customers: true, table: true, kdsTicket: true, payments: true, createdBy: { select: { name: true } } },
       orderBy: { createdAt: 'desc' }
     });
     res.json(orders);
@@ -69,7 +69,7 @@ router.post('/', verifyToken, requireEmployee, async (req, res) => {
         lines: { create: processedLines },
         customers: { connect: customerConnect }
       },
-      include: { lines: { include: { product: true } }, customers: true, table: true }
+      include: { lines: { include: { product: true } }, customers: true, table: true, payments: true }
     });
     if (tableId) await prisma.table.update({ where: { id: tableId }, data: { currentOrderId: order.id } });
     res.status(201).json(order);
@@ -80,7 +80,7 @@ router.get('/:id', verifyToken, requireEmployee, async (req, res) => {
   try {
     const order = await prisma.order.findUnique({
       where: { id: req.params.id },
-      include: { lines: { include: { product: { include: { category: true } } } }, customers: true, table: true, kdsTicket: true }
+      include: { lines: { include: { product: { include: { category: true } } } }, customers: true, table: true, kdsTicket: true, payments: true }
     });
     if (!order) return res.status(404).json({ error: 'Order not found' });
     res.json(order);
@@ -128,19 +128,49 @@ router.put('/:id/send-kitchen', verifyToken, requireEmployee, async (req, res) =
 
 router.put('/:id/pay', verifyToken, requireEmployee, async (req, res) => {
   try {
-    const { paymentMethod, paymentReference } = req.body;
-    if (!paymentMethod) return res.status(404).json({ error: 'Payment method required' });
+    const { paymentMethod, paymentReference, payments } = req.body;
+    if (!paymentMethod && (!payments || payments.length === 0)) {
+      return res.status(404).json({ error: 'Payment method or payments array required' });
+    }
+
+    const existingOrder = await prisma.order.findUnique({ where: { id: req.params.id } });
+    if (!existingOrder) return res.status(404).json({ error: 'Order not found' });
+
+    let paymentRecords = [];
+    if (Array.isArray(payments) && payments.length > 0) {
+      paymentRecords = payments.map(p => ({
+        amount: parseFloat(p.amount),
+        paymentMethod: p.method,
+        paymentReference: p.reference || null
+      }));
+    } else {
+      paymentRecords = [{
+        amount: existingOrder.total,
+        paymentMethod,
+        paymentReference
+      }];
+    }
+
     const order = await prisma.order.update({
       where: { id: req.params.id },
-      data: { status: 'PAID', paymentMethod, paymentReference },
-      include: { lines: { include: { product: true } }, customers: true, table: true }
+      data: {
+        status: 'PAID',
+        paymentMethod: paymentMethod || 'SPLIT',
+        paymentReference: paymentReference || 'Split Payments',
+        payments: { create: paymentRecords }
+      },
+      include: { lines: { include: { product: true } }, customers: true, table: true, payments: true }
     });
+
     if (order.tableId) await prisma.table.update({ where: { id: order.tableId }, data: { currentOrderId: null } });
     await prisma.posSession.update({ where: { id: order.sessionId }, data: { lastSaleAmount: order.total, totalOrders: { increment: 1 }, totalRevenue: { increment: order.total } } });
     const io = req.app.get('io');
     io.to('kds-room').emit('order-paid', { orderId: order.id });
     res.json(order);
-  } catch (e) { res.status(500).json({ error: 'Something went wrong' }); }
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
 });
 
 router.put('/:id/cancel', verifyToken, requireEmployee, async (req, res) => {
@@ -211,7 +241,7 @@ router.put('/:id', verifyToken, requireEmployee, async (req, res) => {
           lines: { create: processedLines },
           customers: { set: customerConnect }
         },
-        include: { lines: { include: { product: true } }, customers: true, table: true }
+        include: { lines: { include: { product: true } }, customers: true, table: true, payments: true }
       });
 
       // Update table currentOrderId
