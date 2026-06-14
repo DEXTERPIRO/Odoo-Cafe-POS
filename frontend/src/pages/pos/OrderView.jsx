@@ -48,13 +48,37 @@ function ReceiptModal({ order, onClose, onNewOrder }) {
   const handlePrint = () => {
     const o = completedOrder;
     const lines = (o.lines || [])
-      .map(l => `<tr><td>${l.product?.name} &times; ${l.quantity}</td><td class="amt">${Number(l.lineTotal).toFixed(2)}</td></tr>`)
+      .map(l => {
+        const rate = parseFloat(l.product?.tax || 0);
+        const lineTax = parseFloat(l.lineTotal || 0) * (rate / 100);
+        const taxText = rate > 0 ? `<br/><span style="font-size:10px;color:#555">${rate}% Tax: Rs.${lineTax.toFixed(2)}</span>` : '';
+        return `<tr><td>${l.product?.name} &times; ${l.quantity}${taxText}</td><td class="amt">Rs.${Number(l.lineTotal).toFixed(2)}</td></tr>`;
+      })
       .join('');
     const discount = parseFloat(o.discountAmount || 0);
     const paymentRows = (o.payments || [])
       .map(p => `<tr><td style="font-size:11px;color:#555">Paid via ${p.paymentMethod} ${p.paymentReference ? `(${p.paymentReference})` : ''}</td><td class="amt" style="font-size:11px;color:#555">Rs.${Number(p.amount).toFixed(2)}</td></tr>`)
       .join('');
     const customerNames = o.customers?.map(c => c.name).join(', ') || o.customer?.name || '';
+
+    // Calculate tax breakdown
+    const taxBreakdown = {};
+    (o.lines || []).forEach(l => {
+      const rate = parseFloat(l.product?.tax || 0);
+      const lineTotal = parseFloat(l.lineTotal || 0);
+      if (!taxBreakdown[rate]) taxBreakdown[rate] = 0;
+      taxBreakdown[rate] += lineTotal * (rate / 100);
+    });
+    const totalPreTax = Object.values(taxBreakdown).reduce((s, v) => s + v, 0);
+    const actualTax = parseFloat(o.taxAmount || 0);
+    const scale = totalPreTax > 0 ? (actualTax / totalPreTax) : 0;
+
+    const taxHtmlLines = Object.keys(taxBreakdown).sort((a, b) => parseFloat(a) - parseFloat(b)).map(rateStr => {
+      const rate = parseFloat(rateStr);
+      const amt = taxBreakdown[rateStr] * scale;
+      return `<div class="row"><span>Tax (${rate}%)</span><span>Rs.${amt.toFixed(2)}</span></div>`;
+    }).join('');
+
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${o.orderNumber}</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
@@ -81,7 +105,7 @@ function ReceiptModal({ order, onClose, onNewOrder }) {
   <div class="divider"></div>
   <div class="row"><span>Subtotal</span><span>Rs.${Number(o.subtotal||0).toFixed(2)}</span></div>
   ${discount > 0 ? `<div class="row"><span>Discount</span><span>-Rs.${discount.toFixed(2)}</span></div>` : ''}
-  <div class="row"><span>Tax (5%)</span><span>Rs.${Number(o.taxAmount||0).toFixed(2)}</span></div>
+  ${taxHtmlLines}
   <div class="total-row"><span>TOTAL</span><span>Rs.${Number(o.total||0).toFixed(2)}</span></div>
   ${paymentRows ? `<table>${paymentRows}</table>` : ''}
   <div class="footer">Thank you! Visit again 🙏</div>
@@ -151,18 +175,51 @@ function ReceiptModal({ order, onClose, onNewOrder }) {
           <span>Date</span><span className="text-slate-800 font-bold">{new Date(order.createdAt).toLocaleString('en-IN')}</span>
         </div>
         <div className="border-t border-dashed border-slate-300 my-3" />
-        {order.lines?.map(l => (
-          <div key={l.id} className="flex justify-between">
-            <span className="text-slate-600">{l.product?.name} × {l.quantity}</span>
-            <span className="text-slate-800 font-bold">{fmt(l.lineTotal)}</span>
-          </div>
-        ))}
+        {order.lines?.map(l => {
+          const rate = parseFloat(l.product?.tax || 0);
+          const lineTax = parseFloat(l.lineTotal || 0) * (rate / 100);
+          return (
+            <div key={l.id} className="flex justify-between items-start">
+              <div className="flex flex-col">
+                <span className="text-slate-600 font-semibold">{l.product?.name} × {l.quantity}</span>
+                {rate > 0 && (
+                  <span className="text-[10px] text-emerald-600 font-medium leading-none mt-0.5">
+                    {rate}% Tax (₹{lineTax.toFixed(2)})
+                  </span>
+                )}
+              </div>
+              <span className="text-slate-800 font-bold">{fmt(l.lineTotal)}</span>
+            </div>
+          );
+        })}
         <div className="border-t border-dashed border-slate-300 my-3" />
         <div className="flex justify-between text-slate-500"><span>Subtotal</span><span className="font-medium text-slate-800">{fmt(order.subtotal)}</span></div>
         {parseFloat(order.discountAmount) > 0 && (
           <div className="flex justify-between text-emerald-600 font-medium"><span>Discount</span><span>−{fmt(order.discountAmount)}</span></div>
         )}
-        <div className="flex justify-between text-slate-500"><span>Tax (5%)</span><span className="font-medium text-slate-800">{fmt(order.taxAmount)}</span></div>
+        {(() => {
+          const linesBreakdown = {};
+          order.lines?.forEach(l => {
+            const rate = parseFloat(l.product?.tax || 0);
+            const lineTotal = parseFloat(l.lineTotal || 0);
+            if (!linesBreakdown[rate]) linesBreakdown[rate] = 0;
+            linesBreakdown[rate] += lineTotal * (rate / 100);
+          });
+          const totalPreTax = Object.values(linesBreakdown).reduce((s, v) => s + v, 0);
+          const actualTax = parseFloat(order.taxAmount || 0);
+          const scale = totalPreTax > 0 ? (actualTax / totalPreTax) : 0;
+
+          return Object.keys(linesBreakdown).sort((a, b) => parseFloat(a) - parseFloat(b)).map(rateStr => {
+            const rate = parseFloat(rateStr);
+            const amt = linesBreakdown[rateStr] * scale;
+            return (
+              <div key={rate} className="flex justify-between text-slate-500">
+                <span>Tax ({rate}%)</span>
+                <span className="font-medium text-slate-800">{fmt(amt)}</span>
+              </div>
+            );
+          });
+        })()}
         <div className="flex justify-between text-violet-600 font-bold text-base mt-2">
           <span>TOTAL</span><span>{fmt(order.total)}</span>
         </div>
@@ -447,6 +504,7 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
       index: g,
       name: getGuestName(g),
       subtotal: 0,
+      preDiscountTax: 0,
       discount: 0,
       tax: 0,
       total: 0
@@ -454,7 +512,9 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
 
     cartItems.forEach((item, itemIdx) => {
       const guestIdx = getAssignedGuest(itemIdx);
-      parts[guestIdx].subtotal += item.price * item.quantity;
+      const itemSubtotal = item.price * item.quantity;
+      parts[guestIdx].subtotal += itemSubtotal;
+      parts[guestIdx].preDiscountTax += itemSubtotal * (parseFloat(item.tax || 0) / 100);
     });
 
     let allocatedTotal = 0;
@@ -463,7 +523,7 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
         const ratio = part.subtotal / subtotal;
         part.discount = totalDiscount * ratio;
         const afterDiscount = Math.max(part.subtotal - part.discount, 0);
-        part.tax = afterDiscount * 0.05;
+        part.tax = part.subtotal > 0 ? part.preDiscountTax * (afterDiscount / part.subtotal) : 0;
         part.total = Math.round((afterDiscount + part.tax) * 100) / 100;
       }
       
@@ -565,6 +625,7 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
         price: parseFloat(l.unitPrice),
         quantity: l.quantity,
         color: l.product?.category?.color,
+        tax: parseFloat(l.product?.tax || 0),
       })));
       if (Array.isArray(orderToLoad.customers)) {
         setCustomers(orderToLoad.customers);
@@ -677,9 +738,41 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
   
   const totalDiscount = promoDiscount + couponDiscountAmt;
   const afterDiscount = Math.max(0, subtotal - totalDiscount);
-  const tax = afterDiscount * 0.05;
+
+  const preDiscountTaxAmount = cartItems.reduce((s, i) => {
+    const rate = parseFloat(i.tax || 0);
+    const itemTotal = (i.price || i.unitPrice || 0) * i.quantity;
+    return s + itemTotal * (rate / 100);
+  }, 0);
+
+  const tax = subtotal > 0 ? preDiscountTaxAmount * (afterDiscount / subtotal) : 0;
   const taxAmount = tax;
   const total = afterDiscount + tax;
+
+  const getTaxBreakdown = (items, grossSubtotal, netSubtotal) => {
+    const breakdown = {};
+    items.forEach(i => {
+      const rate = parseFloat(i.tax !== undefined ? i.tax : (i.product?.tax !== undefined ? i.product.tax : 0));
+      const price = parseFloat(i.price !== undefined ? i.price : (i.unitPrice !== undefined ? i.unitPrice : 0));
+      const qty = parseInt(i.quantity || 0, 10);
+      const itemTotal = price * qty;
+      if (!breakdown[rate]) {
+        breakdown[rate] = 0;
+      }
+      breakdown[rate] += itemTotal * (rate / 100);
+    });
+
+    const scaleFactor = grossSubtotal > 0 ? (netSubtotal / grossSubtotal) : 0;
+    return Object.keys(breakdown).sort((a, b) => parseFloat(a) - parseFloat(b)).map(rateStr => {
+      const rate = parseFloat(rateStr);
+      return {
+        rate,
+        amount: breakdown[rateStr] * scaleFactor
+      };
+    });
+  };
+
+  const taxBreakdown = getTaxBreakdown(cartItems, subtotal, afterDiscount);
 
   const cashChange = cashReceived ? Math.max(0, parseFloat(cashReceived) - total) : null;
 
@@ -698,7 +791,7 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
       if (idx >= 0) {
         const next = [...prev]; next[idx] = { ...next[idx], quantity: next[idx].quantity + 1 }; return next;
       }
-      return [...prev, { productId: product.id, name: product.name, price: parseFloat(product.price), quantity: 1, color: product.category?.color }];
+      return [...prev, { productId: product.id, name: product.name, price: parseFloat(product.price), quantity: 1, color: product.category?.color, tax: parseFloat(product.tax || 0) }];
     });
     toast.success(`${product.name} added`, {
       duration: 1500,
@@ -1167,7 +1260,14 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
                     <div className="w-1.5 h-8 rounded-full shrink-0" style={{ background: itemColor }} />
                     <div className="flex-1 min-w-0">
                       <div className="font-bold text-sm truncate" style={{ color: FG, fontFamily: FONT_H }}>{item.name}</div>
-                      <div className="text-xs mt-0.5" style={{ color: MUTED }}>₹{item.price.toFixed(2)} each</div>
+                      <div className="text-xs mt-0.5 flex gap-1.5 flex-wrap" style={{ color: MUTED }}>
+                        <span>₹{item.price.toFixed(2)} each</span>
+                        {parseFloat(item.tax || 0) > 0 && (
+                          <span className="text-emerald-600 font-medium">
+                            · {item.tax}% Tax (₹{((item.price * item.quantity) * (parseFloat(item.tax || 0) / 100)).toFixed(2)})
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       <button onClick={() => updateQty(idx, -1)}
@@ -1248,9 +1348,11 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
                   <span style={{ color: '#059669', fontWeight: 700 }}>-₹{totalDiscount.toFixed(2)}</span>
                 </div>
               )}
-              <div className="flex justify-between text-sm" style={{ color: MUTED }}>
-                <span>Tax (5%)</span><span style={{ color: FG, fontWeight: 600 }}>₹{tax.toFixed(2)}</span>
-              </div>
+              {taxBreakdown.map(({ rate, amount }) => (
+                <div key={rate} className="flex justify-between text-sm" style={{ color: MUTED }}>
+                  <span>Tax ({rate}%)</span><span style={{ color: FG, fontWeight: 600 }}>₹{amount.toFixed(2)}</span>
+                </div>
+              ))}
               <div className="flex justify-between items-center pt-1.5 mt-1" style={{ borderTop: `2px solid ${BORDER}` }}>
                 <span className="font-black text-base" style={{ color: FG, fontFamily: FONT_H }}>Total</span>
                 <span className="font-black text-xl" style={{ color: ACCENT }}>₹{total.toFixed(2)}</span>
@@ -1436,8 +1538,13 @@ export default function OrderView({ table, session, existingOrder, initialOrder,
                         const guestIdx = getAssignedGuest(itemIdx);
                         return (
                           <div key={itemIdx} className="flex items-center justify-between p-2.5 bg-white border-2 border-slate-200 rounded-xl text-xs" style={{ boxShadow: 'var(--pop-shadow-sm)' }}>
-                            <div className="truncate pr-2 font-medium text-slate-800">
-                              {item.name} <span className="text-slate-400">× {item.quantity}</span>
+                            <div className="truncate pr-2 font-medium text-slate-800 flex flex-col">
+                              <span>{item.name} <span className="text-slate-400">× {item.quantity}</span></span>
+                              {parseFloat(item.tax || 0) > 0 && (
+                                <span className="text-[10px] text-emerald-600 font-bold leading-none mt-0.5">
+                                  {item.tax}% Tax (₹{((item.price * item.quantity) * (parseFloat(item.tax || 0) / 100)).toFixed(2)})
+                                </span>
+                              )}
                             </div>
                             <select
                               value={guestIdx}

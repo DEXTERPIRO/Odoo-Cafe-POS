@@ -25,14 +25,48 @@ const sendReceiptEmail = async (to, order) => {
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
     throw new Error('Email credentials (EMAIL_USER / EMAIL_PASS) are not configured on the hosted server.');
   }
-  const itemRows = order.lines.map(l =>
-    `<tr>
-      <td style="padding:8px;border-bottom:1px solid #333">${l.product.name}</td>
+  const itemRows = order.lines.map(l => {
+    const rate = parseFloat(l.product?.tax || 0);
+    const lineTax = parseFloat(l.lineTotal || 0) * (rate / 100);
+    const taxText = rate > 0 ? `<br/><span style="font-size:11px;color:#9ca3af">${rate}% Tax: Rs.${lineTax.toFixed(2)}</span>` : '';
+    return `<tr>
+      <td style="padding:8px;border-bottom:1px solid #333">${l.product.name}${taxText}</td>
       <td style="padding:8px;border-bottom:1px solid #333;text-align:center">${l.quantity}</td>
       <td style="padding:8px;border-bottom:1px solid #333;text-align:right">Rs.${parseFloat(l.unitPrice).toFixed(2)}</td>
       <td style="padding:8px;border-bottom:1px solid #333;text-align:right">Rs.${parseFloat(l.lineTotal).toFixed(2)}</td>
-    </tr>`
-  ).join('');
+    </tr>`;
+  }).join('');
+
+  const taxBreakdown = {};
+  order.lines.forEach(l => {
+    const rate = parseFloat(l.product?.tax || 0);
+    const lineTotal = parseFloat(l.lineTotal || 0);
+    if (!taxBreakdown[rate]) {
+      taxBreakdown[rate] = 0;
+    }
+    taxBreakdown[rate] += lineTotal * (rate / 100);
+  });
+
+  const totalPreDiscountTax = Object.values(taxBreakdown).reduce((s, a) => s + a, 0);
+  const actualTaxAmount = parseFloat(order.taxAmount);
+  const scale = totalPreDiscountTax > 0 ? (actualTaxAmount / totalPreDiscountTax) : 0;
+
+  const taxHtmlRows = Object.keys(taxBreakdown).sort((a, b) => parseFloat(a) - parseFloat(b)).map(rateStr => {
+    const rate = parseFloat(rateStr);
+    const amount = taxBreakdown[rateStr] * scale;
+    return `
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+        <span style="color:#9ca3af">Tax (${rate}%)</span>
+        <span>Rs.${amount.toFixed(2)}</span>
+      </div>
+    `;
+  }).join('');
+
+  const taxTextLines = Object.keys(taxBreakdown).sort((a, b) => parseFloat(a) - parseFloat(b)).map(rateStr => {
+    const rate = parseFloat(rateStr);
+    const amount = taxBreakdown[rateStr] * scale;
+    return `Tax (${rate}%):  Rs.${amount.toFixed(2)}`;
+  });
 
   const html = `
     <div style="font-family:sans-serif;max-width:500px;margin:auto;background:#1a1a1a;color:#fff;padding:24px;border-radius:12px">
@@ -61,10 +95,7 @@ const sendReceiptEmail = async (to, order) => {
           <span style="color:#9ca3af">Subtotal</span>
           <span>Rs.${parseFloat(order.subtotal).toFixed(2)}</span>
         </div>
-        <div style="display:flex;justify-content:space-between;margin-bottom:8px">
-          <span style="color:#9ca3af">Tax (5%)</span>
-          <span>Rs.${parseFloat(order.taxAmount).toFixed(2)}</span>
-        </div>
+        ${taxHtmlRows}
         ${parseFloat(order.discountAmount) > 0 ? `
         <div style="display:flex;justify-content:space-between;margin-bottom:8px">
           <span style="color:#9ca3af">Discount</span>
@@ -91,10 +122,15 @@ const sendReceiptEmail = async (to, order) => {
     `Date: ${new Date(order.createdAt).toLocaleString('en-IN')}`,
     order.table ? `Table: ${order.table.tableNumber}` : '',
     '',
-    ...order.lines.map(l => `${l.product.name} x${l.quantity}  Rs.${parseFloat(l.lineTotal).toFixed(2)}`),
+    ...order.lines.map(l => {
+      const rate = parseFloat(l.product?.tax || 0);
+      const lineTax = parseFloat(l.lineTotal || 0) * (rate / 100);
+      const taxSuffix = rate > 0 ? ` (+${rate}% Tax: Rs.${lineTax.toFixed(2)})` : '';
+      return `${l.product.name} x${l.quantity}${taxSuffix}  Rs.${parseFloat(l.lineTotal).toFixed(2)}`;
+    }),
     '',
     `Subtotal: Rs.${parseFloat(order.subtotal).toFixed(2)}`,
-    `Tax:      Rs.${parseFloat(order.taxAmount).toFixed(2)}`,
+    ...taxTextLines,
     `TOTAL:    Rs.${parseFloat(order.total).toFixed(2)}`,
     '',
     'Thank you for visiting Cafe POS!',

@@ -82,6 +82,7 @@ export default function OrdersList({ session }) {
       lineTotal: parseFloat(line.lineTotal),
       categoryColor: line.product.category?.color || ACCENT,
       color: line.product.category?.color || ACCENT,
+      tax: parseFloat(line.product.tax || 0),
     }));
     navigate('/pos', {
       state: {
@@ -250,17 +251,27 @@ export default function OrdersList({ session }) {
                     <div className="px-4 py-3" style={{ borderTop: `2px solid ${BORDER}`, background: '#FAFAFA' }}>
                       {/* Line items */}
                       <div className="space-y-1.5 mb-3">
-                        {order.lines?.map(l => (
-                          <div key={l.id} className="flex items-center justify-between text-sm">
-                            <div className="flex items-center gap-2">
-                              <div className="w-2 h-2 rounded-full shrink-0"
-                                   style={{ background: l.product?.category?.color || ACCENT }} />
-                              <span className="font-semibold" style={{ color: FG }}>{l.product?.name}</span>
-                              <span className="text-xs" style={{ color: MUTED }}>× {l.quantity}</span>
+                        {order.lines?.map(l => {
+                          const rate = parseFloat(l.product?.tax || 0);
+                          const lineTax = parseFloat(l.lineTotal || 0) * (rate / 100);
+                          return (
+                            <div key={l.id} className="flex items-center justify-between text-sm">
+                              <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full shrink-0"
+                                     style={{ background: l.product?.category?.color || ACCENT }} />
+                                <div className="flex flex-col">
+                                  <span className="font-semibold" style={{ color: FG }}>{l.product?.name} <span className="text-xs font-normal" style={{ color: MUTED }}>× {l.quantity}</span></span>
+                                  {rate > 0 && (
+                                    <span className="text-[10px] text-emerald-600 font-medium leading-none mt-0.5">
+                                      {rate}% Tax: {fmt(lineTax)}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <span className="font-bold" style={{ color: ACCENT }}>{fmt(l.lineTotal)}</span>
                             </div>
-                            <span className="font-bold" style={{ color: ACCENT }}>{fmt(l.lineTotal)}</span>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
 
                       {/* Totals */}
@@ -273,9 +284,29 @@ export default function OrdersList({ session }) {
                             <span>Discount</span><span>−{fmt(order.discountAmount)}</span>
                           </div>
                         )}
-                        <div className="flex justify-between font-semibold" style={{ color: MUTED }}>
-                          <span>Tax (5%)</span><span style={{ color: FG }}>{fmt(order.taxAmount)}</span>
-                        </div>
+                        {(() => {
+                          const linesBreakdown = {};
+                          order.lines?.forEach(l => {
+                            const rate = parseFloat(l.product?.tax || 0);
+                            const lineTotal = parseFloat(l.lineTotal || 0);
+                            if (!linesBreakdown[rate]) linesBreakdown[rate] = 0;
+                            linesBreakdown[rate] += lineTotal * (rate / 100);
+                          });
+                          const totalPreTax = Object.values(linesBreakdown).reduce((s, v) => s + v, 0);
+                          const actualTax = parseFloat(order.taxAmount || 0);
+                          const scale = totalPreTax > 0 ? (actualTax / totalPreTax) : 0;
+
+                          return Object.keys(linesBreakdown).sort((a, b) => parseFloat(a) - parseFloat(b)).map(rateStr => {
+                            const rate = parseFloat(rateStr);
+                            const amt = linesBreakdown[rateStr] * scale;
+                            return (
+                              <div key={rate} className="flex justify-between font-semibold" style={{ color: MUTED }}>
+                                <span>Tax ({rate}%)</span>
+                                <span style={{ color: FG }}>{fmt(amt)}</span>
+                              </div>
+                            );
+                          });
+                        })()}
                         <div className="flex justify-between font-black text-sm pt-1 border-t-2" style={{ color: ACCENT, borderColor: BORDER }}>
                           <span>Total</span><span>{fmt(order.total)}</span>
                         </div>

@@ -7,6 +7,7 @@ const { sendReceiptEmail } = require('../utils/emailService');
 
 const calcOrder = async (lines, couponCode, organizationId) => {
   let subtotal = 0;
+  let preDiscountTaxAmount = 0;
   const processedLines = [];
   for (const line of lines) {
     const product = await prisma.product.findFirst({
@@ -15,6 +16,8 @@ const calcOrder = async (lines, couponCode, organizationId) => {
     if (!product) continue;
     const lineTotal = parseFloat(product.price) * line.quantity;
     subtotal += lineTotal;
+    const productTaxRate = parseFloat(product.tax || 0);
+    preDiscountTaxAmount += lineTotal * (productTaxRate / 100);
     processedLines.push({ productId: line.productId, quantity: line.quantity, unitPrice: parseFloat(product.price), lineTotal, discount: 0 });
   }
   const { totalDiscount: promoDiscount } = await applyPromotions(lines, subtotal, organizationId);
@@ -29,7 +32,11 @@ const calcOrder = async (lines, couponCode, organizationId) => {
   }
   const discountAmount = promoDiscount + couponDiscount;
   const afterDiscount = Math.max(0, subtotal - discountAmount);
-  const taxAmount = afterDiscount * 0.05;
+  
+  let taxAmount = 0;
+  if (subtotal > 0) {
+    taxAmount = preDiscountTaxAmount * (afterDiscount / subtotal);
+  }
   const total = afterDiscount + taxAmount;
   return { processedLines, subtotal, taxAmount, discountAmount, total };
 };
