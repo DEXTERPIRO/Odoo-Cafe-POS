@@ -65,172 +65,68 @@ The interface is optimized for all devices, ranging from wide desktop displays t
 
 ---
 
-## Screenshots
+## 📸 Screenshots Overview
+
+<details open>
+<summary><b>🔐 Authentication Portal</b></summary>
+<br>
+
+| 🔑 Login Portal | 📝 User Signup & Registration |
+|:---:|:---:|
+| <img src="screenshots/01_login.png" width="100%" alt="Login Portal"/> | <img src="screenshots/02_signup.png" width="100%" alt="Signup Portal"/> |
+| Central login interface routing employees to cashier POS terminal and admins to backend panel. | Form for registering new users; automatically defaults to EMPLOYEE role. |
+
+</details>
+
+<details open>
+<summary><b>🛒 Cashier POS Terminal Flow</b></summary>
+<br>
+
+| 1️⃣ Table Selection & Occupancy | 2️⃣ POS Empty Dashboard |
+|:---:|:---:|
+| <img src="screenshots/03_table_selection.png" width="100%" alt="Table Selection"/> | <img src="screenshots/04_pos_empty.png" width="100%" alt="POS Empty"/> |
+| Live floor map updating table status in real time via Socket.IO. | Clean slate cashier view with color-coded categories. |
+| **3️⃣ Active Cart with Taxes** | **4️⃣ Stacking Coupons & Auto-Promos** |
+| <img src="screenshots/05_pos_with_cart.png" width="100%" alt="Active Cart"/> | <img src="screenshots/06_pos_coupon.png" width="100%" alt="Coupon Applied"/> |
+| Products grid with inline tax percentages and per-rate line item summaries. | Dynamic calculation with auto-applied promotion rules. |
+| **5️⃣ Direct Kitchen Dispatch** | **6️⃣ Smart Checkout & Payment Modal** |
+| <img src="screenshots/07_kitchen_sent.png" width="100%" alt="Kitchen Sent"/> | <img src="screenshots/08_payment_modal.png" width="100%" alt="Payment Modal"/> |
+| Pushing order to KDS instantly with auditory alert. | Cash, Card, or dynamic UPI QR generation. |
+
+</details>
+
+<details open>
+<summary><b>🍳 Kitchen Display System (KDS)</b></summary>
+<br>
+
+| ⏰ Real-time Kanban Board | 🍳 Preparing Tickets |
+|:---:|:---:|
+| <img src="screenshots/09_kitchen_display.png" width="100%" alt="KDS Incoming"/> | <img src="screenshots/10_kitchen_preparing.png" width="100%" alt="KDS Preparing"/> |
+| Color-coded ticketing column board sorting orders based on wait duration. | Preparing state with interactive checkable items. |
+
+</details>
+
+<details open>
+<summary><b>📊 Admin Backend Panel</b></summary>
+<br>
+
+| 🏠 Admin Dashboard Analytics | 📦 Products & Tax Config |
+|:---:|:---:|
+| <img src="screenshots/11_admin_dashboard.png" width="100%" alt="Dashboard"/> | <img src="screenshots/12_admin_products.png" width="100%" alt="Products"/> |
+| Recharts-driven sales metrics, revenue curves, and category donut chart. | CRUD control panel managing product prices, descriptions, and tax rates. |
+| **🎨 Categories Management** | **💳 Payment Methods Setup** |
+| <img src="screenshots/13_admin_categories.png" width="100%" alt="Categories"/> | <img src="screenshots/14_admin_payment_methods.png" width="100%" alt="Payment Methods"/> |
+| Color-coded tag groups mapped directly to POS tabs. | Enable cash/card or assign a custom UPI alias/address. |
+| **🪑 Floor Plans & Table Layout** | **🎫 Coupons & Promotions Editor** |
+| <img src="screenshots/15_admin_tables.png" width="100%" alt="Tables"/> | <img src="screenshots/16_admin_coupons.png" width="100%" alt="Coupons"/> |
+| Customize floor labels and table coordinates. | Setup flat or percentage discount triggers. |
+| **👥 User & Role Administration** | **📑 Financial Reports & CSV Export** |
+| <img src="screenshots/17_admin_users.png" width="100%" alt="Users"/> | <img src="screenshots/18_admin_reports.png" width="100%" alt="Reports"/> |
+| Manage access credentials and toggle user activity. | View sales logs and download analytical archives. |
+
+</details>
 
-### Authentication
 
-**Login Portal**
-
-![Login Portal](screenshots/01_login.png)
-
-The central authentication page for all roles. Employees are redirected to the POS terminal; admins are redirected to the backend dashboard.
-
----
-
-**Signup / Registration**
-
-![Signup Page](screenshots/02_signup.png)
-
-New account registration interface. Accounts are created with the EMPLOYEE role by default; the ADMIN role is assigned manually in the Users management panel.
-
----
-
-### Employee — POS Terminal Flow
-
-**Step 1: Table / Floor Selection**
-
-![Table Selection](screenshots/03_table_selection.png)
-
-On login, employees are presented with a live floor map. Table occupancy status is updated in real time via Socket.IO. Employees select an available table to begin a new order session.
-
----
-
-**Step 2: POS Terminal — Empty Cart**
-
-![POS Terminal - Empty](screenshots/04_pos_empty.png)
-
-The core POS interface. The left side shows a product grid organized by category tabs with color-coded labels. The right side shows the live order cart tied to the selected table.
-
----
-
-**Step 3: POS Terminal — Active Cart (with per-product tax)**
-
-![POS Terminal - Active Cart](screenshots/05_pos_with_cart.png)
-
-Items are added to the cart by clicking product cards. Quantities can be adjusted inline. Each cart item shows its **individual tax rate inline** (e.g., `· 10% Tax (₹12.00)`). The totals section shows a **separate tax line per rate** (e.g., `Tax (5%)` and `Tax (10%)`) instead of a single blended rate. The cart automatically evaluates and applies any eligible promotional rules in real time.
-
----
-
-**Step 4: Coupon Code Applied**
-
-![POS Terminal - Coupon Applied](screenshots/06_pos_coupon.png)
-
-The coupon entry field validates codes against the database. When a valid code is entered (e.g., `WELCOME20`), the discount is stacked on top of any auto-applied promotions, and the order summary reflects the updated total. Tax is recalculated proportionally after the discount is applied.
-
----
-
-**Step 5: Order Sent to Kitchen**
-
-![Order Sent to Kitchen](screenshots/07_kitchen_sent.png)
-
-Clicking the "Kitchen" button transmits the order via Socket.IO to the KDS instantly. The order status updates to "Cooking" on the POS and the ticket appears on all connected kitchen displays without any page refresh.
-
----
-
-**Step 6: Payment / Checkout Modal**
-
-![Payment Modal](screenshots/08_payment_modal.png)
-
-The checkout modal supports three payment methods:
-- **Cash**: Accepts tender amount and displays change due.
-- **Card**: Standard card payment confirmation flow.
-- **UPI**: Generates a QR code from the configured UPI handle for cashless payments.
-
-After payment confirmation, a receipt is generated with options to Print, Email, or start a New Order.
-
----
-
-### Kitchen Display System
-
-**KDS — Incoming Orders (To Cook)**
-
-![Kitchen Display - Incoming](screenshots/09_kitchen_display.png)
-
-The KDS organizes tickets in a three-column Kanban board: **To Cook**, **Preparing**, and **Completed**. Each ticket shows the table number, order items, and a per-item completion checklist. Ticket borders change color based on age — green (< 10 min), yellow (10–15 min), red pulsing (> 15 min).
-
----
-
-**KDS — Ticket in Preparing State**
-
-![Kitchen Display - Preparing](screenshots/10_kitchen_preparing.png)
-
-Clicking the status advancement button moves a ticket from "To Cook" to "Preparing". The POS terminal and admin dashboard reflect this status update in real time. Audio notifications play when new tickets arrive.
-
----
-
-### Admin — Backend Panel
-
-**Dashboard — Sales Overview**
-
-![Admin Dashboard](screenshots/11_admin_dashboard.png)
-
-The admin dashboard provides a live summary of today's sales sessions, revenue, and order counts. Key metrics are displayed as stat cards with trend indicators. Recharts-powered visualizations show revenue trends (line chart) and category distribution (donut chart).
-
----
-
-**Products Management**
-
-![Admin Products](screenshots/12_admin_products.png)
-
-Full CRUD interface for managing menu items. Each product has a name, description, price, category, **individual tax rate (%)**, and availability toggle. Products are searchable and filterable by category. Inline editing supports quick updates.
-
----
-
-**Categories Management**
-
-![Admin Categories](screenshots/13_admin_categories.png)
-
-Category management page for organizing the product menu. Each category has a name, color label (rendered as tabs on the POS terminal), and an active/inactive toggle.
-
----
-
-**Payment Methods**
-
-![Admin Payment Methods](screenshots/14_admin_payment_methods.png)
-
-Configure which payment options are available at checkout. For UPI, a QR code image or UPI handle can be uploaded and previewed. Payment methods can be enabled or disabled individually without affecting existing transaction records.
-
----
-
-**Floor & Table Management**
-
-![Admin Tables](screenshots/15_admin_tables.png)
-
-Create and manage floors and tables. Each table has a name/number and belongs to a floor section. Tables appear on the employee's floor selection popup. Occupied tables are visually distinguished from available ones in real time.
-
----
-
-**Coupons & Promotions**
-
-![Admin Coupons](screenshots/16_admin_coupons.png)
-
-Two-part discounting system:
-- **Coupons**: Fixed or percentage discounts applied via a code entered by the employee at checkout.
-- **Promotions**: Conditional rules (e.g., "apply 5% off for orders above Rs. 300") evaluated automatically when cart conditions are met.
-
-Both systems stack on top of each other and are configurable with validity windows and usage limits.
-
----
-
-**User Management**
-
-![Admin Users](screenshots/17_admin_users.png)
-
-View and manage all registered accounts. Admins can change user roles (ADMIN / EMPLOYEE), reset passwords, deactivate accounts, and create new users directly from this interface.
-
----
-
-**Reports & Analytics**
-
-![Admin Reports](screenshots/18_admin_reports.png)
-
-The reports module provides:
-- **Revenue Overview**: Line chart of daily/weekly revenue trends.
-- **Category Breakdown**: Donut chart showing sales distribution by product category.
-- **Session Logs**: Tabular list of completed order sessions with totals.
-- **Export**: Download full session and revenue data as CSV or PDF for offline analysis.
-
----
 
 ## Feature Reference
 
